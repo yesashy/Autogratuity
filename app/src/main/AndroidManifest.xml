@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.BILLING" /> <!-- For Google Play Billing -->
 
     <application
         android:allowBackup="true"
@@ -29,9 +32,20 @@
         <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
-            android:exported="false" />
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
-        <!-- Notification Listener Service -->
+        <!-- Pro Subscribe Activity -->
+        <activity
+            android:name=".ProSubscribeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Autogratuity" />
+
+        <!-- Notification Listener Service - Free Feature -->
         <service
             android:name=".ShiptNotificationListenerService"
             android:label="Autogratuity Notification Listener"
@@ -42,10 +56,51 @@
             </intent-filter>
         </service>
 
-        <!-- Do Not Deliver Job Service -->
+        <!-- Shipt Accessibility Service - Pro Feature -->
+        <service
+            android:name=".services.RobustShiptAccessibilityService"
+            android:label="Autogratuity Shipt Capture"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/shipt_accessibility_service_config" />
+        </service>
+
+        <!-- Do Not Deliver Job Service - Free Feature -->
         <service
             android:name=".services.DoNotDeliverService"
             android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+
+        <!-- Notification Persistence Service - Free Feature -->
+        <service
+            android:name=".services.NotificationPersistenceService"
+            android:exported="false" />
+
+        <!-- Shipt Capture Background Service - Pro Feature -->
+        <service
+            android:name=".services.ShiptCaptureBackgroundService"
+            android:exported="false" />
+
+        <!-- Boot Completed Receiver -->
+        <receiver
+            android:name=".receivers.BootCompletedReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Capture Process Receiver - Pro Feature -->
+        <receiver
+            android:name=".receivers.CaptureProcessReceiver"
+            android:enabled="true"
             android:exported="false" />
 
     </application>

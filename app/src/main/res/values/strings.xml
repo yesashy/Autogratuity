@@ -9,4 +9,19 @@
     <string name="status_ready">Status: Ready to test</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
+
+    <!-- Accessibility Service -->
+    <string name="shipt_accessibility_service_description">Silently captures Shipt delivery information to build your delivery database. This helps track which addresses tip well without manual entry.</string>
+    <string name="accessibility_permission_title">Shipt Capture Permission</string>
+    <string name="accessibility_permission_message">To automatically track Shipt deliveries and build your tip database, Autogratuity needs accessibility permission. This runs silently in the background.</string>
+    <string name="accessibility_permission_button">Open Settings</string>
+
+    <!-- Freemium -->
+    <string name="free_limit_title">Free Tier Limit Reached</string>
+    <string name="free_limit_message">You\'ve reached the 100 delivery mapping limit for the free tier. Upgrade to Pro for unlimited mappings and automatic order capture!</string>
+    <string name="upgrade_to_pro">Upgrade to Pro</string>
+    <string name="create_new_account">Create New Account</string>
+    <string name="remaining_mappings">%d deliveries remaining</string>
+    <string name="pro_user">Pro User</string>
+    <string name="unlimited_mapping">Unlimited</string>
 </resources>

@@ -23,6 +23,15 @@
             android:title="Bulk Upload" />
     </group>
 
+    <item android:title="Pro Features">
+        <menu>
+            <item
+                android:id="@+id/nav_upgrade"
+                android:icon="@drawable/ic_pro"
+                android:title="Upgrade to Pro" />
+        </menu>
+    </item>
+
     <item android:title="Account">
         <menu>
             <item

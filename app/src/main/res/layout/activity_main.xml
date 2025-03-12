@@ -44,6 +44,15 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent">
 
+                <TextView
+                    android:id="@+id/remaining_mappings_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="12dp"
+                    android:text="100 remaining"
+                    android:textColor="@color/white"
+                    android:textSize="12sp" />
+
                 <ImageView
                     android:id="@+id/sync_icon"
                     android:layout_width="14dp"
@@ -71,7 +80,7 @@
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.appcompat.widget.Toolbar>
 
-    <!-- Content area - replaced TabLayout and ViewPager with FrameLayout -->
+    <!-- Content area -->
     <FrameLayout
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"
@@ -117,7 +126,7 @@
             app:layout_constraintTop_toTopOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Quick Switch Button - updated to use the fixed icon -->
+    <!-- Quick Switch Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/quick_switch_button"
         android:layout_width="wrap_content"

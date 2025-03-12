@@ -3,6 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_upgrade_pro"
+        android:title="Upgrade to Pro"
+        android:icon="@drawable/ic_pro"
+        app:showAsAction="ifRoom" />
+
+    <item
         android:id="@+id/action_import_data"
         android:title="Import from Google Maps"
         app:showAsAction="never" />

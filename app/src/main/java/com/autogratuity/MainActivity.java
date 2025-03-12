@@ -5,13 +5,18 @@ import android.app.job.JobInfo;
 import android.app.job.JobScheduler;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.Animation;
@@ -38,7 +43,11 @@ import com.autogratuity.fragments.DashboardFragment;
 import com.autogratuity.fragments.DeliveriesFragment;
 import com.autogratuity.fragments.MapFragment;
 import com.autogratuity.services.DoNotDeliverService;
+import com.autogratuity.services.NotificationPersistenceService;
+import com.autogratuity.services.RobustShiptAccessibilityService;
+import com.autogratuity.services.ShiptCaptureBackgroundService;
 import com.autogratuity.utils.KmlImportUtil;
+import com.autogratuity.utils.SubscriptionManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.textfield.TextInputEditText;
@@ -69,6 +78,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
 
+    // Subscription management
+    private SubscriptionManager subscriptionManager;
+    private MenuItem proUpgradeMenuItem;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -86,6 +99,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             finish();
             return;
         }
+
+        // Initialize subscription manager
+        subscriptionManager = SubscriptionManager.getInstance(this);
+        subscriptionManager.setStatusListener(new SubscriptionManager.SubscriptionStatusListener() {
+            @Override
+            public void onSubscriptionStatusChanged(String status) {
+                // Update UI elements based on subscription status
+                updateProFeaturesUI();
+            }
+        });
 
         // Schedule the Do Not Deliver job
         scheduleDoNotDeliverJob();
@@ -128,8 +151,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             navHeaderEmail.setText(currentUser.getEmail());
         }
 
-        // Request notification access if needed
-        requestNotificationAccessIfNeeded();
+        // Initialize all services based on user's subscription
+        initializeServices();
+
+        // Request battery optimization exemption for reliability
+        requestBatteryOptimizationExemption();
     }
 
     private void setupToolbar() {
@@ -189,6 +215,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             title = "Bulk Upload";
         } else if (itemId == R.id.nav_sign_out) {
             signOut();
+            return true;
+        } else if (itemId == R.id.nav_upgrade) {
+            showSubscriptionOptions();
             return true;
         }
 
@@ -487,19 +516,44 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 });
     }
 
-    private void importFromGoogleMaps() {
-        // Create intent to select KML/KMZ file
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        String[] mimeTypes = {"application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", "application/xml", "text/xml"};
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-        startActivityForResult(intent, REQUEST_KML_KMZ_FILE);
+    /**
+     * Initialize all services based on subscription status
+     */
+    private void initializeServices() {
+        // Always start the notification listener service
+        startNotificationListenerService();
+
+        // Only start Pro features if user has access
+        if (subscriptionManager.isProUser()) {
+            startProFeatures();
+        } else {
+            // If not a Pro user, show a prompt about Pro features during first launch
+            showProFeaturePromptIfNeeded();
+        }
     }
 
+    /**
+     * Start the notification listener service (available to all users)
+     */
+    private void startNotificationListenerService() {
+        // Request notification access if needed
+        requestNotificationAccessIfNeeded();
+
+        // Start the persistence service
+        Intent persistenceIntent = new Intent(this, NotificationPersistenceService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(persistenceIntent);
+        } else {
+            startService(persistenceIntent);
+        }
+    }
+
+    /**
+     * Request notification access if needed
+     */
     private void requestNotificationAccessIfNeeded() {
         // Check if notification access is granted
-        String enabledListeners = android.provider.Settings.Secure.getString(
+        String enabledListeners = Settings.Secure.getString(
                 getContentResolver(),
                 "enabled_notification_listeners");
 
@@ -514,6 +568,221 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     .setNegativeButton("Later", null)
                     .show();
         }
+    }
+
+    /**
+     * Request battery optimization exemption
+     */
+    private void requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent intent = new Intent();
+            String packageName = getPackageName();
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                // Show dialog asking user to disable battery optimization
+                new AlertDialog.Builder(this)
+                        .setTitle("Battery Optimization")
+                        .setMessage("Autogratuity needs to be exempted from battery optimization to reliably capture Shipt notifications in the background. Would you like to disable battery optimization for this app?")
+                        .setPositiveButton("Yes", (dialog, which) -> {
+                            try {
+                                intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                                intent.setData(Uri.parse("package:" + packageName));
+                                startActivity(intent);
+                            } catch (Exception e) {
+                                Log.e(TAG, "Could not launch battery optimization settings", e);
+                                Toast.makeText(this, "Please manually disable battery optimization for Autogratuity in your device settings", Toast.LENGTH_LONG).show();
+                            }
+                        })
+                        .setNegativeButton("No", (dialog, which) -> {
+                            Toast.makeText(this, "Autogratuity might not reliably capture tip notifications in the background", Toast.LENGTH_LONG).show();
+                        })
+                        .show();
+            }
+        }
+    }
+
+    /**
+     * Start Pro features (accessibility service)
+     */
+    private void startProFeatures() {
+        // Request accessibility permission if needed
+        requestShiptAccessibilityServiceIfNeeded();
+
+        // Start the background service for Shipt captures
+        Intent captureIntent = new Intent(this, ShiptCaptureBackgroundService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(captureIntent);
+        } else {
+            startService(captureIntent);
+        }
+    }
+
+    /**
+     * Check if the Shipt accessibility service is enabled
+     * and request if not
+     */
+    private void requestShiptAccessibilityServiceIfNeeded() {
+        boolean isEnabled = isAccessibilityServiceEnabled(RobustShiptAccessibilityService.class);
+
+        if (!isEnabled) {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.accessibility_permission_title)
+                    .setMessage(R.string.accessibility_permission_message)
+                    .setPositiveButton(R.string.accessibility_permission_button, (dialog, which) -> {
+                        Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                        startActivity(intent);
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        }
+    }
+
+    /**
+     * Check if a specific accessibility service is enabled
+     */
+    private boolean isAccessibilityServiceEnabled(Class<?> serviceClass) {
+        String expectedServiceName = serviceClass.getName();
+        String enabledServicesSetting = Settings.Secure.getString(
+                getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+
+        if (enabledServicesSetting == null)
+            return false;
+
+        TextUtils.SimpleStringSplitter splitter = new TextUtils.SimpleStringSplitter(':');
+        splitter.setString(enabledServicesSetting);
+
+        while (splitter.hasNext()) {
+            String enabledService = splitter.next();
+
+            if (enabledService.contains(expectedServiceName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Show a prompt about Pro features on first launch
+     */
+    private void showProFeaturePromptIfNeeded() {
+        SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        boolean hasShownPromo = prefs.getBoolean("has_shown_pro_promo", false);
+
+        if (!hasShownPromo) {
+            // Show the dialog
+            new AlertDialog.Builder(this)
+                    .setTitle("Autogratuity Pro Features")
+                    .setMessage("Upgrade to Pro for automatic order tracking! " +
+                            "Pro users can automatically track Shipt deliveries without manual entry, " +
+                            "building a comprehensive tip map with minimal effort.")
+                    .setPositiveButton("Try Free for 7 Days", (dialog, which) -> {
+                        // Start the trial
+                        if (subscriptionManager.isTrialAvailable()) {
+                            subscriptionManager.startFreeTrial();
+                            startProFeatures();
+                            Toast.makeText(this, "Your 7-day free trial has started!", Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(this, "You've already used your free trial", Toast.LENGTH_SHORT).show();
+                            showSubscriptionOptions();
+                        }
+                    })
+                    .setNeutralButton("Learn More", (dialog, which) -> {
+                        showProFeatureDetails();
+                    })
+                    .setNegativeButton("Not Now", null)
+                    .show();
+
+            // Mark as shown
+            prefs.edit().putBoolean("has_shown_pro_promo", true).apply();
+        }
+    }
+
+    /**
+     * Show detailed information about Pro features
+     */
+    private void showProFeatureDetails() {
+        new AlertDialog.Builder(this)
+                .setTitle("Pro Features")
+                .setMessage("Autogratuity Pro includes:\n\n" +
+                        "• Automatic order capture from Shipt\n" +
+                        "• Zero manual entry required\n" +
+                        "• Build your tip map passively while you work\n" +
+                        "• Increase earnings by making data-driven decisions\n\n" +
+                        "Available as a monthly subscription, yearly subscription (save 25%), " +
+                        "or lifetime purchase.")
+                .setPositiveButton("Subscribe Now", (dialog, which) -> {
+                    showSubscriptionOptions();
+                })
+                .setNegativeButton("Maybe Later", null)
+                .show();
+    }
+
+    /**
+     * Show subscription options dialog
+     */
+    private void showSubscriptionOptions() {
+        final String[] options = {
+                "Monthly: $3.99/month",
+                "Yearly: $29.99/year (save 37%)",
+                "Lifetime: $79.99 (never pay again)"
+        };
+
+        new AlertDialog.Builder(this)
+                .setTitle("Choose a Subscription")
+                .setItems(options, (dialog, which) -> {
+                    switch (which) {
+                        case 0: // Monthly
+                            subscriptionManager.launchPurchaseFlow(this,
+                                    SubscriptionManager.PRODUCT_ID_PRO_MONTHLY);
+                            break;
+                        case 1: // Yearly
+                            subscriptionManager.launchPurchaseFlow(this,
+                                    SubscriptionManager.PRODUCT_ID_PRO_YEARLY);
+                            break;
+                        case 2: // Lifetime
+                            subscriptionManager.launchPurchaseFlow(this,
+                                    SubscriptionManager.PRODUCT_ID_PRO_LIFETIME);
+                            break;
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /**
+     * Update UI elements based on subscription status
+     */
+    private void updateProFeaturesUI() {
+        boolean isPro = subscriptionManager.isProUser();
+
+        // Update menu items if available
+        if (proUpgradeMenuItem != null) {
+            proUpgradeMenuItem.setVisible(!isPro);
+        }
+
+        // Update nav drawer items
+        MenuItem navUpgradeItem = navigationView.getMenu().findItem(R.id.nav_upgrade);
+        if (navUpgradeItem != null) {
+            navUpgradeItem.setVisible(!isPro);
+        }
+
+        // If user just upgraded to Pro, start the Pro features
+        if (isPro) {
+            startProFeatures();
+        }
+    }
+
+    private void importFromGoogleMaps() {
+        // Create intent to select KML/KMZ file
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        String[] mimeTypes = {"application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", "application/xml", "text/xml"};
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+        startActivityForResult(intent, REQUEST_KML_KMZ_FILE);
     }
 
     private void scheduleDoNotDeliverJob() {
@@ -549,13 +818,48 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+
+        // Store reference to the Pro upgrade menu item
+        proUpgradeMenuItem = menu.findItem(R.id.action_upgrade_pro);
+
+        // Update visibility based on subscription status
+        updateProFeaturesUI();
+
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.action_upgrade_pro) {
+            showSubscriptionOptions();
+            return true;
+        } else if (id == R.id.action_import_data) {
+            importFromGoogleMaps();
+            return true;
+        } else if (id == R.id.action_sign_out) {
+            signOut();
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+
         // Check if user is still logged in
         if (mAuth.getCurrentUser() == null) {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
         }
+
+        // Update UI based on current subscription status
+        updateProFeaturesUI();
     }
 
     public void signOut() {
