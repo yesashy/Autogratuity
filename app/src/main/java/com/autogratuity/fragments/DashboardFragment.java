@@ -11,21 +11,21 @@ import androidx.fragment.app.Fragment;
 
 import com.autogratuity.R;
 
-public class AddressesFragment extends Fragment {
+public class DashboardFragment extends Fragment {
 
-    public static AddressesFragment newInstance() {
-        return new AddressesFragment();
+    public static DashboardFragment newInstance() {
+        return new DashboardFragment();
     }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_addresses, container, false);
+        return inflater.inflate(R.layout.fragment_dashboard, container, false);
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        // Initialize addresses list and load data
+        // Initialize dashboard views and load data
     }
 }
