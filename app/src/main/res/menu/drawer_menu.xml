@@ -17,16 +17,11 @@
             android:id="@+id/nav_map"
             android:icon="@drawable/ic_map"
             android:title="Map" />
+        <item
+            android:id="@+id/nav_bulk_upload"
+            android:icon="@drawable/ic_upload"
+            android:title="Bulk Upload" />
     </group>
-
-    <item android:title="Import &amp; Export">
-        <menu>
-            <item
-                android:id="@+id/nav_import_kml"
-                android:icon="@drawable/ic_upload"
-                android:title="Bulk Upload (.KML)" />
-        </menu>
-    </item>
 
     <item android:title="Account">
         <menu>

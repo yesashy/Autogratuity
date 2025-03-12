@@ -31,10 +31,9 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
-import androidx.viewpager2.widget.ViewPager2;
 
-import com.autogratuity.adapters.ViewPagerAdapter;
 import com.autogratuity.fragments.AddressesFragment;
+import com.autogratuity.fragments.BulkUploadFragment;
 import com.autogratuity.fragments.DashboardFragment;
 import com.autogratuity.fragments.DeliveriesFragment;
 import com.autogratuity.fragments.MapFragment;
@@ -42,15 +41,12 @@ import com.autogratuity.services.DoNotDeliverService;
 import com.autogratuity.utils.KmlImportUtil;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
-import com.google.android.material.tabs.TabLayout;
-import com.google.android.material.tabs.TabLayoutMediator;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,8 +59,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
     private Toolbar toolbar;
-    private ViewPager2 viewPager;
-    private TabLayout tabLayout;
     private FloatingActionButton quickSwitchButton;
     private ImageView syncIcon;
     private TextView syncText;
@@ -74,7 +68,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
-    private ViewPagerAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,8 +95,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         setupNavigationDrawer();
         setupViewComponents();
 
-        // Set up ViewPager with Fragments
-        setupViewPager();
+        // Load default fragment on start
+        if (savedInstanceState == null) {
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, DashboardFragment.newInstance())
+                    .commit();
+            navigationView.setCheckedItem(R.id.nav_dashboard);
+        }
 
         // Set up Quick Switch button
         quickSwitchButton.setOnClickListener(v -> {
@@ -161,8 +159,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void setupViewComponents() {
         // These views are inside the included layout
         View mainContent = findViewById(R.id.app_main_content);
-        viewPager = mainContent.findViewById(R.id.view_pager);
-        tabLayout = mainContent.findViewById(R.id.tab_layout);
         quickSwitchButton = mainContent.findViewById(R.id.quick_switch_button);
         syncIcon = mainContent.findViewById(R.id.sync_icon);
         syncText = mainContent.findViewById(R.id.sync_text);
@@ -173,19 +169,36 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         int itemId = item.getItemId();
+        Fragment fragment = null;
+        String title = "";
 
         if (itemId == R.id.nav_dashboard) {
-            viewPager.setCurrentItem(0);
+            fragment = DashboardFragment.newInstance();
+            title = "Dashboard";
         } else if (itemId == R.id.nav_deliveries) {
-            viewPager.setCurrentItem(1);
+            fragment = DeliveriesFragment.newInstance();
+            title = "Deliveries";
         } else if (itemId == R.id.nav_addresses) {
-            viewPager.setCurrentItem(2);
+            fragment = AddressesFragment.newInstance();
+            title = "Addresses";
         } else if (itemId == R.id.nav_map) {
-            viewPager.setCurrentItem(3);
-        } else if (itemId == R.id.nav_import_kml) {
-            importFromGoogleMaps();
+            fragment = MapFragment.newInstance();
+            title = "Map";
+        } else if (itemId == R.id.nav_bulk_upload) {
+            fragment = BulkUploadFragment.newInstance();
+            title = "Bulk Upload";
         } else if (itemId == R.id.nav_sign_out) {
             signOut();
+            return true;
+        }
+
+        if (fragment != null) {
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, fragment)
+                    .commit();
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setTitle(title);
+            }
         }
 
         drawerLayout.closeDrawer(GravityCompat.START);
@@ -240,55 +253,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
     }
 
-    private void setupViewPager() {
-        adapter = new ViewPagerAdapter(this);
-        adapter.addFragment(DashboardFragment.newInstance(), "Dashboard");
-        adapter.addFragment(DeliveriesFragment.newInstance(), "Deliveries");
-        adapter.addFragment(AddressesFragment.newInstance(), "Addresses");
-        adapter.addFragment(MapFragment.newInstance(), "Map");
-
-        viewPager.setAdapter(adapter);
-
-        // Connect TabLayout with ViewPager2
-        new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
-            tab.setText(adapter.getPageTitle(position));
-            // Set icons for tabs
-            switch (position) {
-                case 0:
-                    tab.setIcon(R.drawable.ic_dashboard);
-                    break;
-                case 1:
-                    tab.setIcon(R.drawable.ic_package);
-                    break;
-                case 2:
-                    tab.setIcon(R.drawable.ic_home);
-                    break;
-                case 3:
-                    tab.setIcon(R.drawable.ic_map);
-                    break;
-            }
-        }).attach();
-
-        // Sync navigation drawer selection with viewpager
-        viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-            @Override
-            public void onPageSelected(int position) {
-                super.onPageSelected(position);
-
-                // Highlight the corresponding item in nav drawer
-                if (position == 0) {
-                    navigationView.setCheckedItem(R.id.nav_dashboard);
-                } else if (position == 1) {
-                    navigationView.setCheckedItem(R.id.nav_deliveries);
-                } else if (position == 2) {
-                    navigationView.setCheckedItem(R.id.nav_addresses);
-                } else if (position == 3) {
-                    navigationView.setCheckedItem(R.id.nav_map);
-                }
-            }
-        });
-    }
-
     private void launchShiptApp() {
         // Try multiple potential package names for Shipt
         String[] packageNames = {"com.shipt.shopper", "com.shipt.user", "com.shipt"};
@@ -336,14 +300,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             syncText.setText("Synced Just now");
 
             // Refresh the current fragment if it's the dashboard
-            if (viewPager != null && adapter != null) {
-                int currentItem = viewPager.getCurrentItem();
-                // Use the getFragment method from our updated adapter
-                Fragment fragment = adapter.getFragment(currentItem);
-
-                if (fragment instanceof DashboardFragment) {
-                    ((DashboardFragment) fragment).refreshData();
-                }
+            Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+            if (currentFragment instanceof DashboardFragment) {
+                ((DashboardFragment) currentFragment).refreshData();
             }
         }, 1500);
     }
@@ -528,6 +487,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 });
     }
 
+    private void importFromGoogleMaps() {
+        // Create intent to select KML/KMZ file
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        String[] mimeTypes = {"application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", "application/xml", "text/xml"};
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+        startActivityForResult(intent, REQUEST_KML_KMZ_FILE);
+    }
+
     private void requestNotificationAccessIfNeeded() {
         // Check if notification access is granted
         String enabledListeners = android.provider.Settings.Secure.getString(
@@ -577,16 +546,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 Log.e(TAG, "Failed to schedule Do Not Deliver job");
             }
         }
-    }
-
-    private void importFromGoogleMaps() {
-        // Create intent to select KML/KMZ file
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        String[] mimeTypes = {"application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", "application/xml", "text/xml"};
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-        startActivityForResult(intent, REQUEST_KML_KMZ_FILE);
     }
 
     @Override

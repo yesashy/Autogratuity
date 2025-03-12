@@ -71,25 +71,13 @@
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.appcompat.widget.Toolbar>
 
-    <!-- Tabs -->
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tab_layout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/gray_900"
-        app:tabIndicatorColor="@color/purple_400"
-        app:tabSelectedTextColor="@color/purple_400"
-        app:tabTextColor="@color/gray_400"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
-        app:tabInlineLabel="true" />
-
-    <!-- ViewPager for tabs content -->
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/view_pager"
+    <!-- Content area - replaced TabLayout and ViewPager with FrameLayout -->
+    <FrameLayout
+        android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         app:layout_constraintBottom_toTopOf="@+id/divider"
-        app:layout_constraintTop_toBottomOf="@id/tab_layout" />
+        app:layout_constraintTop_toBottomOf="@id/toolbar" />
 
     <!-- Divider line -->
     <View
@@ -129,14 +117,14 @@
             app:layout_constraintTop_toTopOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Quick Switch Button -->
+    <!-- Quick Switch Button - updated to use the fixed icon -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/quick_switch_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:backgroundTint="@color/gray_800"
-        android:src="@drawable/ic_arrows_left_right"
+        android:src="@drawable/ic_swap_apps"
         app:borderWidth="0dp"
         app:fabCustomSize="52dp"
         app:tint="@color/white"
