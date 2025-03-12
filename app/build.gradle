@@ -32,6 +32,17 @@ android {
     buildFeatures {
         viewBinding true
     }
+
+    // NEW: Add packaging options to fix JDK image error
+    packagingOptions {
+        resources {
+            excludes += [
+                    'META-INF/gradle/incremental.annotation.processors',
+                    'META-INF/LICENSE.md',
+                    'META-INF/LICENSE-notice.md'
+            ]
+        }
+    }
 }
 
 dependencies {
