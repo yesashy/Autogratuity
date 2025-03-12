@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace 'com.autogratuity'
-    compileSdk 33  // Keep at 33 for compatibility
+    compileSdk 33
 
     defaultConfig {
         applicationId "com.autogratuity"
@@ -13,8 +13,6 @@ android {
         targetSdk 33
         versionCode 1
         versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -23,41 +21,36 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Add this to work around JDK image transformation issues
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/LICENSE.txt', 'META-INF/license.txt', 'META-INF/NOTICE', 'META-INF/NOTICE.txt', 'META-INF/notice.txt', 'META-INF/ASL2.0']
+        }
     }
 }
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'  // Using 1.9.0 to avoid SDK 34 requirement
+    implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
-    // Specific versions of AndroidX components that work with SDK 33
-    implementation 'androidx.activity:activity:1.7.2'  // Important: Using 1.7.2 not 1.8.0
-    implementation 'androidx.fragment:fragment:1.6.1'
-    implementation 'androidx.core:core:1.10.1'
-
-    // Firebase dependencies
-    implementation platform('com.google.firebase:firebase-bom:32.2.0')  // Using BOM for consistent versions
+    // Firebase
+    implementation platform('com.google.firebase:firebase-bom:32.6.0')
     implementation 'com.google.firebase:firebase-analytics'
     implementation 'com.google.firebase:firebase-firestore'
     implementation 'com.google.firebase:firebase-auth'
 
-    // WebView related dependencies
-    implementation 'androidx.webkit:webkit:1.6.1'  // Compatible with SDK 33
+    // WebView
+    implementation 'androidx.webkit:webkit:1.6.1'
 
-    // Fix for duplicate Kotlin standard library classes
-    configurations.all {
-        resolutionStrategy {
-            // Force a specific version of Kotlin stdlib to resolve conflicts
-            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.20'
-            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.20'
-            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.20'
-            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.20'
-        }
-    }
+    // Explicit Kotlin dependency to avoid duplicates
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

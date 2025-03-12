@@ -1,17 +1,13 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// Top-level build file
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.4.2'
-        classpath 'com.google.gms:google-services:4.3.15'
+        classpath 'com.android.tools.build:gradle:8.2.0'
+        classpath 'com.google.gms:google-services:4.4.0'
     }
 }
 
-// Do NOT include allprojects block as it's now handled in settings.gradle
-
-tasks.register('clean', Delete) {
-    delete rootProject.buildDir
-}
+// Remove the allprojects block entirely
