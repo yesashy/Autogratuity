@@ -24,8 +24,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 }
 
@@ -47,6 +47,17 @@ dependencies {
 
     // WebView related dependencies
     implementation 'androidx.webkit:webkit:1.6.1'  // Compatible with SDK 33
+
+    // Fix for duplicate Kotlin standard library classes
+    configurations.all {
+        resolutionStrategy {
+            // Force a specific version of Kotlin stdlib to resolve conflicts
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.20'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.20'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.20'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.20'
+        }
+    }
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

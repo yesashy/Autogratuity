@@ -91,3 +91,25 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
             }
         }
     }
+
+    private void processTip(final String orderId, final double tipAmount) {
+        if (orderId == null || db == null) return;
+
+        Log.d(TAG, "Processing tip: Order #" + orderId + ", Amount: $" + tipAmount);
+
+        // Store this tip in the pending tips collection
+        Map<String, Object> pendingTip = new HashMap<>();
+        pendingTip.put("order_id", orderId);
+        pendingTip.put("tip_amount", tipAmount);
+        pendingTip.put("timestamp", Timestamp.now());
+
+        db.collection("pending_tips")
+                .add(pendingTip)
+                .addOnSuccessListener(documentReference -> {
+                    Log.d(TAG, "Pending tip stored with ID: " + documentReference.getId());
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error storing pending tip", e);
+                });
+    } // This closing bracket was missing
+} // This closing bracket was missing
