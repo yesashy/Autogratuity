@@ -50,36 +50,40 @@
 
                     <!-- Stat cards for Today -->
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/today_tips_received"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Tips Received"
-                        app:statValue="$12.75" />
+                        app:statValue="$0.00" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/today_pending_tips"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Pending Tips"
-                        app:statValue="2" />
+                        app:statValue="0" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/today_average_tip"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Average Tip"
-                        app:statValue="$6.38" />
+                        app:statValue="$0.00" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/today_deliveries"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Deliveries"
-                        app:statValue="3" />
+                        app:statValue="0" />
                 </GridLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -122,36 +126,40 @@
                     android:rowCount="2">
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/week_tips_received"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Tips Received"
-                        app:statValue="$47.50" />
+                        app:statValue="$0.00" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/week_pending_tips"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Pending Tips"
-                        app:statValue="5" />
+                        app:statValue="0" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/week_average_tip"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Average Tip"
-                        app:statValue="$5.94" />
+                        app:statValue="$0.00" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/week_deliveries"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Deliveries"
-                        app:statValue="12" />
+                        app:statValue="0" />
                 </GridLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -194,36 +202,40 @@
                     android:rowCount="2">
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/month_tips_received"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Tips Received"
-                        app:statValue="$183.25" />
+                        app:statValue="$0.00" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/month_pending_tips"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Pending Tips"
-                        app:statValue="8" />
+                        app:statValue="0" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/month_average_tip"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Average Tip"
-                        app:statValue="$6.11" />
+                        app:statValue="$0.00" />
 
                     <com.autogratuity.views.StatCard
+                        android:id="@+id/month_deliveries"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
                         app:statLabel="Deliveries"
-                        app:statValue="38" />
+                        app:statValue="0" />
                 </GridLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -259,69 +271,14 @@
                     android:background="@color/gray_700" />
 
                 <LinearLayout
+                    android:id="@+id/recent_activity_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="12dp">
+                    <!-- Dynamically filled in code -->
 
-                        <View
-                            android:layout_width="8dp"
-                            android:layout_height="8dp"
-                            android:layout_gravity="center_vertical"
-                            android:background="@color/green_500"
-                            android:layout_marginEnd="12dp"/>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Tip received: $7.50 (Order #A123)"
-                            android:textColor="@color/white"/>
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="12dp">
-
-                        <View
-                            android:layout_width="8dp"
-                            android:layout_height="8dp"
-                            android:layout_gravity="center_vertical"
-                            android:background="@color/purple_400"
-                            android:layout_marginEnd="12dp"/>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="New delivery: 456 Oak St"
-                            android:textColor="@color/white"/>
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <View
-                            android:layout_width="8dp"
-                            android:layout_height="8dp"
-                            android:layout_gravity="center_vertical"
-                            android:background="@color/green_500"
-                            android:layout_marginEnd="12dp"/>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Tip received: $4.25 (Order #B456)"
-                            android:textColor="@color/white"/>
-                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -356,72 +313,14 @@
                     android:background="@color/gray_700" />
 
                 <LinearLayout
+                    android:id="@+id/best_tipping_areas_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="12dp">
+                    <!-- Dynamically filled in code -->
 
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Downtown"
-                            android:textColor="@color/white"/>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="$8.75 avg"
-                            android:textColor="@color/green_400"
-                            android:textStyle="bold"/>
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="12dp">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Westside"
-                            android:textColor="@color/white"/>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="$6.50 avg"
-                            android:textColor="@color/green_400"
-                            android:textStyle="bold"/>
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Northpark"
-                            android:textColor="@color/white"/>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="$5.25 avg"
-                            android:textColor="@color/green_400"
-                            android:textStyle="bold"/>
-                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

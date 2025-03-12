@@ -25,6 +25,14 @@ public class ViewPagerAdapter extends FragmentStateAdapter {
         return fragmentTitles.get(position);
     }
 
+    // Add this method to get a fragment by position
+    public Fragment getFragment(int position) {
+        if (position >= 0 && position < fragments.size()) {
+            return fragments.get(position);
+        }
+        return null;
+    }
+
     @NonNull
     @Override
     public Fragment createFragment(int position) {

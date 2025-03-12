@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Autogratuity</string>
     <string name="app_title">Autogratuity Configuration Test</string>
@@ -6,4 +7,6 @@
     <string name="test_webview">Test WebView</string>
     <string name="launch_app">Launch Autogratuity App</string>
     <string name="status_ready">Status: Ready to test</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
 </resources>
