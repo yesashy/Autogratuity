@@ -24,7 +24,7 @@
             android:layout_height="wrap_content"
             android:textColor="@color/white"
             android:textSize="20sp"
-            android:textStyle="medium"
+            android:textStyle="normal"
             tools:text="$12.75" />
     </LinearLayout>
 </merge>
