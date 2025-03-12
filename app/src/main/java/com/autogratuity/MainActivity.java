@@ -48,6 +48,7 @@ import com.autogratuity.services.RobustShiptAccessibilityService;
 import com.autogratuity.services.ShiptCaptureBackgroundService;
 import com.autogratuity.utils.KmlImportUtil;
 import com.autogratuity.utils.SubscriptionManager;
+import com.autogratuity.utils.UsageTracker;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.textfield.TextInputEditText;
@@ -74,12 +75,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private ImageButton refreshButton;
     private Button addDeliveryButton;
     private TextView navHeaderEmail;
+    private TextView remainingMappingsText;
 
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
 
     // Subscription management
     private SubscriptionManager subscriptionManager;
+    private UsageTracker usageTracker;
     private MenuItem proUpgradeMenuItem;
 
     @Override
@@ -107,6 +110,28 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             public void onSubscriptionStatusChanged(String status) {
                 // Update UI elements based on subscription status
                 updateProFeaturesUI();
+            }
+        });
+
+        // Initialize usage tracker
+        usageTracker = UsageTracker.getInstance(this);
+        usageTracker.setListener(new UsageTracker.UsageUpdateListener() {
+            @Override
+            public void onUsageUpdated(int mappingCount, int remainingMappings, boolean isPro) {
+                updateRemainingMappingsUI(remainingMappings, isPro);
+            }
+        });
+
+        // Load usage data
+        usageTracker.loadUsageData(new UsageTracker.UsageDataCallback() {
+            @Override
+            public void onDataLoaded(int mappingCount, boolean isPro) {
+                // Data loaded, UI will be updated via the listener
+            }
+
+            @Override
+            public void onError(Exception e) {
+                Log.e(TAG, "Error loading usage data", e);
             }
         });
 
@@ -190,6 +215,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         syncText = mainContent.findViewById(R.id.sync_text);
         refreshButton = mainContent.findViewById(R.id.refresh_button);
         addDeliveryButton = mainContent.findViewById(R.id.add_delivery_button);
+
+        // Find remaining mappings text if in the layout
+        remainingMappingsText = mainContent.findViewById(R.id.remaining_mappings_text);
+        if (remainingMappingsText != null) {
+            // Will be updated when usage data loads
+            remainingMappingsText.setVisibility(View.VISIBLE);
+        }
     }
 
     @Override
@@ -337,6 +369,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void showAddDeliveryDialog() {
+        // Check if user can add more mappings
+        if (!usageTracker.canAddMapping() && !subscriptionManager.isProUser()) {
+            // User has reached the free tier limit
+            showFreeTierLimitReachedDialog();
+            return;
+        }
+
         Dialog dialog = new Dialog(this);
         dialog.setContentView(R.layout.dialog_add_delivery);
         dialog.getWindow().setBackgroundDrawableResource(R.color.gray_900);
@@ -389,6 +428,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         dialog.show();
     }
 
+    /**
+     * Show a dialog when user reaches the free tier limit
+     */
+    private void showFreeTierLimitReachedDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Free Tier Limit Reached")
+                .setMessage("You've reached the " + UsageTracker.FREE_TIER_MAPPING_LIMIT +
+                        " delivery mapping limit for the free tier. Upgrade to Pro for unlimited " +
+                        "mappings and automatic order capture!")
+                .setPositiveButton("Upgrade to Pro", (dialog, which) -> {
+                    showSubscriptionOptions();
+                })
+                .setNeutralButton("Create New Account", (dialog, which) -> {
+                    // Sign out and redirect to login screen
+                    signOut();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void saveDelivery(String orderId, String address, double tipAmount) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) return;
@@ -416,6 +475,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                     // Update address collection
                     updateAddress(address, orderId, tipAmount);
+
+                    // Record this mapping in usage tracker
+                    usageTracker.recordMapping();
 
                     // Refresh UI
                     refreshData();
@@ -514,6 +576,32 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         db.collection("addresses").add(addressData);
                     }
                 });
+    }
+
+    /**
+     * Update UI that shows remaining mappings
+     */
+    private void updateRemainingMappingsUI(int remainingMappings, boolean isPro) {
+        if (remainingMappingsText == null) return;
+
+        if (isPro) {
+            remainingMappingsText.setText("Pro User");
+            remainingMappingsText.setTextColor(getResources().getColor(R.color.green_700));
+        } else {
+            remainingMappingsText.setText(remainingMappings + " deliveries remaining");
+
+            // Change text color based on how many are left
+            int colorRes;
+            if (remainingMappings > 20) {
+                colorRes = R.color.white;
+            } else if (remainingMappings > 5) {
+                colorRes = R.color.yellow_500;
+            } else {
+                colorRes = R.color.red_500;
+            }
+
+            remainingMappingsText.setTextColor(getResources().getColor(colorRes));
+        }
     }
 
     /**
