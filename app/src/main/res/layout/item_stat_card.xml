@@ -1,30 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<merge xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/gray_800"
+    android:orientation="vertical"
+    android:padding="12dp">
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/stat_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/gray_800"
-        android:orientation="vertical"
-        android:padding="12dp">
+        android:textColor="@color/gray_400"
+        android:textSize="14sp"
+        tools:text="Tips Received" />
 
-        <TextView
-            android:id="@+id/stat_label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/gray_400"
-            android:textSize="14sp"
-            tools:text="Tips Received" />
-
-        <TextView
-            android:id="@+id/stat_value"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/white"
-            android:textSize="20sp"
-            android:textStyle="normal"
-            tools:text="$12.75" />
-    </LinearLayout>
-</merge>
+    <TextView
+        android:id="@+id/stat_value"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/white"
+        android:textSize="20sp"
+        android:textStyle="normal"
+        tools:text="$12.75" />
+</LinearLayout>

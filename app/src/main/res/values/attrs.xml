@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Custom attributes for StatCard -->
+    <declare-styleable name="StatCard">
+        <attr name="statLabel" format="string" />
+        <attr name="statValue" format="string" />
+    </declare-styleable>
+</resources>

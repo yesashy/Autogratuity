@@ -27,7 +27,8 @@
                 android:text="Autogratuity"
                 android:textColor="@color/white"
                 android:textSize="20sp"
-                android:textStyle="medium"
+                android:textStyle="normal"
+                android:fontWeight="500"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
@@ -65,7 +66,7 @@
                     android:layout_marginStart="4dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_refresh"
-                    android:tint="@color/gray_300" />
+                    app:tint="@color/gray_300" />
             </LinearLayout>
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.appcompat.widget.Toolbar>

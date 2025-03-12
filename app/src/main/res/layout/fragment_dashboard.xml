@@ -9,8 +9,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:spacing="16dp">
+        android:orientation="vertical">
 
         <!-- Today Card -->
         <com.google.android.material.card.MaterialCardView
@@ -50,7 +49,7 @@
                     android:rowCount="2">
 
                     <!-- Stat cards for Today -->
-                    <include layout="@layout/item_stat_card"
+                    <com.autogratuity.views.StatCard
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
@@ -58,7 +57,7 @@
                         app:statLabel="Tips Received"
                         app:statValue="$12.75" />
 
-                    <include layout="@layout/item_stat_card"
+                    <com.autogratuity.views.StatCard
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
@@ -66,7 +65,7 @@
                         app:statLabel="Pending Tips"
                         app:statValue="2" />
 
-                    <include layout="@layout/item_stat_card"
+                    <com.autogratuity.views.StatCard
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
@@ -74,7 +73,7 @@
                         app:statLabel="Average Tip"
                         app:statValue="$6.38" />
 
-                    <include layout="@layout/item_stat_card"
+                    <com.autogratuity.views.StatCard
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
@@ -94,10 +93,67 @@
             app:cardBackgroundColor="@color/gray_800"
             app:cardElevation="0dp">
 
-            <!-- Similar structure as Today card -->
-            <!-- I'm not including the full layout to keep this response concise -->
-            <!-- The structure would be identical to the Today card but with "7 DAYS" title -->
-            <!-- and different stat values -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/gray_800"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    android:text="7 DAYS"
+                    android:textColor="@color/gray_400"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/gray_700" />
+
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="16dp"
+                    android:columnCount="2"
+                    android:rowCount="2">
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Tips Received"
+                        app:statValue="$47.50" />
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Pending Tips"
+                        app:statValue="5" />
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Average Tip"
+                        app:statValue="$5.94" />
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Deliveries"
+                        app:statValue="12" />
+                </GridLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- 30 Days Card -->
@@ -109,8 +165,67 @@
             app:cardBackgroundColor="@color/gray_800"
             app:cardElevation="0dp">
 
-            <!-- Similar structure as Today card -->
-            <!-- Would contain "30 DAYS" title and appropriate stats -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/gray_800"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    android:text="30 DAYS"
+                    android:textColor="@color/gray_400"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/gray_700" />
+
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="16dp"
+                    android:columnCount="2"
+                    android:rowCount="2">
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Tips Received"
+                        app:statValue="$183.25" />
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Pending Tips"
+                        app:statValue="8" />
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Average Tip"
+                        app:statValue="$6.11" />
+
+                    <com.autogratuity.views.StatCard
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        app:statLabel="Deliveries"
+                        app:statValue="38" />
+                </GridLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Recent Activity Card -->
@@ -122,7 +237,93 @@
             app:cardBackgroundColor="@color/gray_800"
             app:cardElevation="0dp">
 
-            <!-- Card for recent activity with list items -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/gray_800"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    android:text="RECENT ACTIVITY"
+                    android:textColor="@color/gray_400"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/gray_700" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <View
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:layout_gravity="center_vertical"
+                            android:background="@color/green_500"
+                            android:layout_marginEnd="12dp"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tip received: $7.50 (Order #A123)"
+                            android:textColor="@color/white"/>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <View
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:layout_gravity="center_vertical"
+                            android:background="@color/purple_400"
+                            android:layout_marginEnd="12dp"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="New delivery: 456 Oak St"
+                            android:textColor="@color/white"/>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <View
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:layout_gravity="center_vertical"
+                            android:background="@color/green_500"
+                            android:layout_marginEnd="12dp"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tip received: $4.25 (Order #B456)"
+                            android:textColor="@color/white"/>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Best Tipping Areas Card -->
@@ -133,7 +334,96 @@
             app:cardBackgroundColor="@color/gray_800"
             app:cardElevation="0dp">
 
-            <!-- Card for best tipping areas -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/gray_800"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    android:text="BEST TIPPING AREAS"
+                    android:textColor="@color/gray_400"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/gray_700" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Downtown"
+                            android:textColor="@color/white"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$8.75 avg"
+                            android:textColor="@color/green_400"
+                            android:textStyle="bold"/>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Westside"
+                            android:textColor="@color/white"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$6.50 avg"
+                            android:textColor="@color/green_400"
+                            android:textStyle="bold"/>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Northpark"
+                            android:textColor="@color/white"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$5.25 avg"
+                            android:textColor="@color/green_400"
+                            android:textStyle="bold"/>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
