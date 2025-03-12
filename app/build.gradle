@@ -24,16 +24,16 @@ android {
         }
     }
 
+    // Configure for Java 17
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     buildFeatures {
         viewBinding true
     }
 
-    // NEW: Add packaging options to fix JDK image error
     packagingOptions {
         resources {
             excludes += [
