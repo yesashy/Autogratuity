@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Autogratuity</string>
+    <string name="app_title">Autogratuity Configuration Test</string>
+    <string name="test_auth">Test Authentication</string>
+    <string name="test_db">Test Firestore Database</string>
+    <string name="test_webview">Test WebView</string>
+    <string name="launch_app">Launch Autogratuity App</string>
+    <string name="status_ready">Status: Ready to test</string>
+</resources>
