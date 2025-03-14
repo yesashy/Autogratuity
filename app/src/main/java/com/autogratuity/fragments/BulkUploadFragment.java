@@ -19,10 +19,13 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
 import com.autogratuity.R;
-import com.autogratuity.utils.GeoJsonImportUtil;
-import com.autogratuity.utils.KmlImportUtil;
+import com.autogratuity.repositories.CachedFirestoreRepository;
+import com.autogratuity.repositories.IFirestoreRepository;
+import com.autogratuity.utils.ImportManager;
 import com.autogratuity.utils.UsageTracker;
 import com.google.android.material.card.MaterialCardView;
+
+import java.util.List;
 
 /**
  * Fragment for bulk uploading delivery data from external sources
@@ -31,16 +34,18 @@ public class BulkUploadFragment extends Fragment {
     private static final String TAG = "BulkUploadFragment";
     private static final int REQUEST_KML_FILE = 101;
     private static final int REQUEST_GEOJSON_FILE = 102;
+    private static final int REQUEST_CSV_FILE = 103;
     
     private Button importKmlButton;
     private Button importGeoJsonButton;
+    private Button importCsvButton;
     private TextView statusTextView;
     private ProgressBar progressBar;
     private LinearLayout resultsContainer;
     private MaterialCardView instructionsCard;
     
-    private KmlImportUtil kmlImportUtil;
-    private GeoJsonImportUtil geoJsonImportUtil;
+    private ImportManager importManager;
+    private IFirestoreRepository repository;
     private UsageTracker usageTracker;
     
     /**
@@ -54,8 +59,22 @@ public class BulkUploadFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        kmlImportUtil = new KmlImportUtil(requireContext());
-        geoJsonImportUtil = new GeoJsonImportUtil(requireContext());
+        // Initialize repositories
+        repository = new CachedFirestoreRepository(requireContext());
+        
+        // Get reference to map fragment to update after imports
+        MapFragment mapFragment = null;
+        try {
+            mapFragment = (MapFragment) getParentFragmentManager()
+                    .findFragmentByTag("map_fragment");
+        } catch (Exception e) {
+            // Ignore if map fragment not found
+        }
+        
+        // Initialize import manager
+        importManager = new ImportManager(requireContext(), repository, mapFragment);
+        
+        // Initialize usage tracker
         usageTracker = UsageTracker.getInstance(requireContext());
     }
     
@@ -72,6 +91,7 @@ public class BulkUploadFragment extends Fragment {
         // Initialize views
         importKmlButton = view.findViewById(R.id.import_kml_button);
         importGeoJsonButton = view.findViewById(R.id.import_geojson_button);
+        importCsvButton = view.findViewById(R.id.import_csv_button);
         statusTextView = view.findViewById(R.id.status_text);
         progressBar = view.findViewById(R.id.progress_bar);
         resultsContainer = view.findViewById(R.id.results_container);
@@ -97,6 +117,17 @@ public class BulkUploadFragment extends Fragment {
             }
             
             openFileChooser(REQUEST_GEOJSON_FILE, "application/json", "application/geo+json");
+        });
+        
+        // Set up CSV import button
+        importCsvButton.setOnClickListener(v -> {
+            // Check if user has available mappings
+            if (!usageTracker.canAddMapping() && !usageTracker.isPro()) {
+                showFreeTierLimitReachedDialog();
+                return;
+            }
+            
+            openFileChooser(REQUEST_CSV_FILE, "text/csv", "application/vnd.ms-excel");
         });
         
         // Initialize with empty status
@@ -144,9 +175,32 @@ public class BulkUploadFragment extends Fragment {
                 break;
                 
             case REQUEST_GEOJSON_FILE:
-                handleGeoJsonImport(fileUri);
+                showDuplicateCheckDialog(fileUri);
+                break;
+                
+            case REQUEST_CSV_FILE:
+                handleCsvImport(fileUri);
                 break;
         }
+    }
+    
+    /**
+     * Show dialog to choose how to handle duplicates
+     */
+    private void showDuplicateCheckDialog(Uri fileUri) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Duplicate Management")
+                .setMessage("How would you like to handle potential duplicate entries?")
+                .setPositiveButton("Update Existing Records", (dialog, which) -> {
+                    // Import and update existing records
+                    startGeoJsonImport(fileUri, false, true);
+                })
+                .setNegativeButton("Skip Duplicates", (dialog, which) -> {
+                    // Import and skip duplicates
+                    startGeoJsonImport(fileUri, true, false);
+                })
+                .setNeutralButton("Cancel", null)
+                .show();
     }
     
     /**
@@ -163,51 +217,105 @@ public class BulkUploadFragment extends Fragment {
                     resultsContainer.removeAllViews();
                     
                     // Perform the import
-                    boolean success = kmlImportUtil.importFromKmlKmz(fileUri);
-                    
-                    if (success) {
-                        updateStatus("Processing KML/KMZ data...", true);
-                        // The KmlImportUtil handles the completion asynchronously
-                        // So we don't update the UI here
-                    } else {
-                        showError("Failed to import KML/KMZ data");
-                    }
+                    importManager.importFromKml(fileUri, new ImportManager.ImportListener() {
+                        @Override
+                        public void onImportCompleted(int newCount, int updatedCount, 
+                                                     int duplicateCount, int invalidCount, 
+                                                     List<String> warnings) {
+                            // Update the UI on the main thread
+                            if (getActivity() != null) {
+                                getActivity().runOnUiThread(() -> {
+                                    showEnhancedImportResults(newCount, updatedCount, 
+                                            duplicateCount, invalidCount, warnings);
+                                });
+                            }
+                        }
+                        
+                        @Override
+                        public void onImportFailed(String message, List<String> errors) {
+                            // Show error on the main thread
+                            if (getActivity() != null) {
+                                getActivity().runOnUiThread(() -> {
+                                    showError("Import failed: " + message);
+                                });
+                            }
+                        }
+                    });
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
     }
     
     /**
-     * Handle GeoJSON file import
+     * Start GeoJSON import with duplicate handling options
      */
-    private void handleGeoJsonImport(Uri fileUri) {
+    private void startGeoJsonImport(Uri fileUri, boolean skipDuplicates, boolean updateExisting) {
+        // Start import process
+        updateStatus("Importing GeoJSON data...", true);
+        resultsContainer.removeAllViews();
+        
+        // Perform the import with duplicate options
+        importManager.importFromGeoJson(fileUri, skipDuplicates, updateExisting, 
+                new ImportManager.ImportListener() {
+            @Override
+            public void onImportCompleted(int newCount, int updatedCount, 
+                                         int duplicateCount, int invalidCount,
+                                         List<String> warnings) {
+                // Update the UI on the main thread
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        showEnhancedImportResults(newCount, updatedCount, 
+                                duplicateCount, invalidCount, warnings);
+                    });
+                }
+            }
+            
+            @Override
+            public void onImportFailed(String message, List<String> errors) {
+                // Show error on the main thread
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        showError("Import failed: " + message);
+                    });
+                }
+            }
+        });
+    }
+    
+    /**
+     * Handle CSV file import
+     */
+    private void handleCsvImport(Uri fileUri) {
         // Show import confirmation dialog
         new AlertDialog.Builder(requireContext())
-                .setTitle("Import from GeoJSON")
-                .setMessage("Import delivery data from this file? This will add locations with order IDs and tip information to your Autogratuity database.")
+                .setTitle("Import from CSV")
+                .setMessage("Import delivery data from this CSV file? This will add locations to your Autogratuity database.")
                 .setPositiveButton("Import", (dialog, which) -> {
                     // Start import process
-                    updateStatus("Importing GeoJSON data...", true);
+                    updateStatus("Importing CSV data...", true);
                     resultsContainer.removeAllViews();
                     
                     // Perform the import
-                    geoJsonImportUtil.importFromGeoJson(fileUri, new GeoJsonImportUtil.ImportCallback() {
+                    importManager.importFromCsv(fileUri, new ImportManager.ImportListener() {
                         @Override
-                        public void onImportCompleted(GeoJsonImportUtil.ImportStatistics statistics) {
+                        public void onImportCompleted(int newCount, int updatedCount, 
+                                                     int duplicateCount, int invalidCount,
+                                                     List<String> warnings) {
                             // Update the UI on the main thread
                             if (getActivity() != null) {
                                 getActivity().runOnUiThread(() -> {
-                                    showImportResults(statistics);
+                                    showEnhancedImportResults(newCount, updatedCount, 
+                                            duplicateCount, invalidCount, warnings);
                                 });
                             }
                         }
                         
                         @Override
-                        public void onImportFailed(String errorMessage) {
+                        public void onImportFailed(String message, List<String> errors) {
                             // Show error on the main thread
                             if (getActivity() != null) {
                                 getActivity().runOnUiThread(() -> {
-                                    showError("Import failed: " + errorMessage);
+                                    showError("Import failed: " + message);
                                 });
                             }
                         }
@@ -232,9 +340,11 @@ public class BulkUploadFragment extends Fragment {
     }
     
     /**
-     * Show import results
+     * Show enhanced import results with detailed statistics
      */
-    private void showImportResults(GeoJsonImportUtil.ImportStatistics stats) {
+    private void showEnhancedImportResults(int newCount, int updatedCount, 
+                                          int duplicateCount, int invalidCount,
+                                          List<String> warnings) {
         // Update status
         updateStatus("Import completed", false);
         
@@ -246,16 +356,20 @@ public class BulkUploadFragment extends Fragment {
         titleTextView.setText("Import Results");
         
         StringBuilder details = new StringBuilder();
-        details.append("Total locations: ").append(stats.getTotalFeatures()).append("\n");
-        details.append("Successfully imported: ").append(stats.getSuccessfulImports()).append("\n");
-        details.append("Failed imports: ").append(stats.getFailedImports()).append("\n");
-        details.append("Duplicate entries: ").append(stats.getDuplicateEntries()).append("\n");
+        details.append("New records: ").append(newCount).append("\n");
+        details.append("Updated records: ").append(updatedCount).append("\n");
+        details.append("Skipped duplicates: ").append(duplicateCount).append("\n");
+        details.append("Invalid records: ").append(invalidCount).append("\n");
         
-        // Add errors if any
-        if (!stats.getErrors().isEmpty()) {
-            details.append("\nErrors:\n");
-            for (String error : stats.getErrors()) {
-                details.append("- ").append(error).append("\n");
+        // Add warnings if any
+        if (warnings != null && !warnings.isEmpty()) {
+            details.append("\nWarnings:\n");
+            for (int i = 0; i < Math.min(5, warnings.size()); i++) {
+                details.append("- ").append(warnings.get(i)).append("\n");
+            }
+            
+            if (warnings.size() > 5) {
+                details.append("- And ").append(warnings.size() - 5).append(" more...\n");
             }
         }
         
@@ -263,7 +377,8 @@ public class BulkUploadFragment extends Fragment {
         resultsContainer.addView(resultView);
         
         // Record the successful imports in usage tracker
-        for (int i = 0; i < stats.getSuccessfulImports(); i++) {
+        int totalProcessed = newCount + updatedCount;
+        for (int i = 0; i < totalProcessed; i++) {
             usageTracker.recordMapping();
         }
         
@@ -273,7 +388,8 @@ public class BulkUploadFragment extends Fragment {
         // Show toast with summary
         Toast.makeText(
                 requireContext(),
-                "Imported " + stats.getSuccessfulImports() + " out of " + stats.getTotalFeatures() + " locations",
+                String.format("Processed %d locations (%d new, %d updated)", 
+                             totalProcessed, newCount, updatedCount),
                 Toast.LENGTH_LONG
         ).show();
     }
@@ -302,7 +418,9 @@ public class BulkUploadFragment extends Fragment {
                         " delivery mapping limit for the free tier. Upgrade to Pro for unlimited " +
                         "mappings and automatic order capture!")
                 .setPositiveButton("Upgrade to Pro", (dialog, which) -> {
-                    // TODO: Direct to subscription options
+                    // Navigate to subscription activity
+                    Intent intent = new Intent(requireContext(), com.autogratuity.ProSubscribeActivity.class);
+                    startActivity(intent);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();

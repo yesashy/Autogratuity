@@ -2,6 +2,7 @@ package com.autogratuity.repositories;
 
 import com.autogratuity.models.Address;
 import com.autogratuity.models.Delivery;
+import com.autogratuity.models.DeliveryData;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
@@ -34,6 +35,7 @@ public interface IFirestoreRepository {
     // Batch operations for bulk import
     Task<Void> batchAddDeliveries(List<Delivery> deliveries);
     Task<Void> batchAddAddresses(List<Address> addresses);
+    Task<Void> batchSaveDeliveries(List<DeliveryData> deliveries);
     
     // Geo-based queries
     Task<QuerySnapshot> getAddressesNearLocation(double latitude, double longitude, double radiusKm);
@@ -59,4 +61,11 @@ public interface IFirestoreRepository {
     
     // Utility method to access the Firestore instance directly when needed
     FirebaseFirestore getFirestore();
+    
+    // Notification method for UI updates
+    void notifyDataChanged();
+    
+    // Verification status methods
+    Task<Void> markAsVerified(String deliveryId, boolean verified);
+    Task<Void> updateVerificationStatus(String deliveryId, String source, String notes);
 }

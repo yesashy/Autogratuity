@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autogratuity Knowledge Base</title>
+    <style>
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .logo {
+            max-width: 200px;
+            margin-bottom: 20px;
+        }
+        
+        .intro-section {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border-left: 5px solid #4285F4;
+        }
+        
+        .intro-title {
+            color: #4285F4;
+            margin-top: 0;
+            font-size: 24px;
+        }
+        
+        .faq-container {
+            margin-bottom: 60px;
+        }
+        
+        .faq-category {
+            margin-bottom: 30px;
+        }
+        
+        .category-title {
+            color: #4285F4;
+            border-bottom: 2px solid #4285F4;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .faq-item {
+            background-color: #fff;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .faq-question {
+            padding: 15px 20px;
+            cursor: pointer;
+            position: relative;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background-color 0.3s;
+        }
+        
+        .faq-question:hover {
+            background-color: #f5f9ff;
+        }
+        
+        .faq-question:after {
+            content: '+';
+            font-size: 22px;
+            color: #4285F4;
+        }
+        
+        .faq-question.active:after {
+            content: '−';
+        }
+        
+        .faq-answer {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease;
+            border-top: 0px solid #eee;
+        }
+        
+        .faq-answer.show {
+            padding: 15px 20px;
+            max-height: 1000px;
+            border-top: 1px solid #eee;
+        }
+        
+        .highlight {
+            background-color: #f0f7ff;
+            padding: 12px 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .pro-badge {
+            background-color: #4285F4;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        
+        .tip-visual {
+            background-color: #e9f5e9;
+            border-left: 4px solid #34a853;
+            padding: 10px 15px;
+            margin: 10px 0;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 14px;
+            color: #777;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+            
+            .intro-section {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="[Your Logo URL]" alt="Autogratuity Logo" class="logo">
+        <h1>Autogratuity Knowledge Base</h1>
+    </div>
+    
+    <section class="intro-section">
+        <h2 class="intro-title">Your Delivery Tip Tracking Revolution</h2>
+        <p>
+            Autogratuity transforms how delivery drivers track, analyze, and optimize their tips. Designed specifically for the modern gig economy, our app combines powerful location mapping, intelligent data processing, and intuitive analytics to help you maximize earnings and efficiency. Whether you're a full-time delivery professional or weekend hustler, Autogratuity gives you the insights and tools to work smarter, not harder.
+        </p>
+        <p>
+            Browse through our knowledge base below to discover how Autogratuity can revolutionize your delivery experience and boost your bottom line.
+        </p>
+    </section>
+    
+    <div class="faq-container">
+        <!-- Getting Started Section -->
+        <div class="faq-category">
+            <h3 class="category-title">Getting Started</h3>
+            
+            <div class="faq-item">
+                <div class="faq-question">What exactly is Autogratuity?</div>
+                <div class="faq-answer">
+                    <p>Autogratuity is a specialized mobile app designed specifically for delivery drivers who want to track and optimize their tip earnings. It combines location intelligence, automatic data capture, and powerful analytics to help you:</p>
+                    <ul>
+                        <li>Track tips by location and customer</li>
+                        <li>Identify high-value delivery areas</li>
+                        <li>Import existing delivery history</li>
+                        <li>Create visual heat maps of tipping hotspots</li>
+                        <li>Make data-driven decisions about which orders to accept</li>
+                    </ul>
+                    <p>Think of it as your personal delivery intelligence platform that works across all delivery apps (Shipt, Instacart, DoorDash, UberEats, etc.) to give you a comprehensive view of your earning potential.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Who can benefit from using Autogratuity?</div>
+                <div class="faq-answer">
+                    <p>Autogratuity is perfect for:</p>
+                    <ul>
+                        <li><strong>Full-time delivery professionals</strong> who want to maximize their earnings through data-driven insights</li>
+                        <li><strong>Part-time gig workers</strong> looking to optimize the limited hours they have available</li>
+                        <li><strong>Multi-app drivers</strong> who need a consolidated view of their delivery performance across platforms</li>
+                        <li><strong>New drivers</strong> who want to quickly learn which areas and customers provide the best tips</li>
+                        <li><strong>Experienced drivers</strong> with extensive delivery history who want to import and analyze past performance</li>
+                    </ul>
+                    <p>If you're delivering for apps like Shipt, Instacart, DoorDash, UberEats, Grubhub, or any other delivery service, Autogratuity will help you work smarter and earn more.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How do I get started with Autogratuity?</div>
+                <div class="faq-answer">
+                    <p>Getting started with Autogratuity is simple:</p>
+                    <ol>
+                        <li><strong>Download the app</strong> from the Google Play Store</li>
+                        <li><strong>Create your account</strong> with a valid email address</li>
+                        <li><strong>Enable permissions</strong> for location services and notifications (crucial for automatic tip capture)</li>
+                        <li><strong>Import existing data</strong> (optional) from Google Maps, spreadsheets, or other sources</li>
+                        <li><strong>Complete the quick tutorial</strong> to understand the app's features</li>
+                    </ol>
+                    <p class="highlight">Pro Tip: For the best experience, allow Autogratuity to run in the background and enable notification access. This enables automatic order and tip capturing, the core feature that makes Autogratuity so powerful.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Key Features Section -->
+        <div class="faq-category">
+            <h3 class="category-title">Key Features</h3>
+            
+            <div class="faq-item">
+                <div class="faq-question">What makes Autogratuity different from other tracking apps?</div>
+                <div class="faq-answer">
+                    <p>Autogratuity stands apart with several unique innovations:</p>
+                    <ul>
+                        <li><strong>Automatic Delivery Detection</strong> - Our app intelligently captures delivery information without manual input, saving you time and ensuring accuracy</li>
+                        <li><strong>Cross-Platform Support</strong> - Unlike platform-specific tools, Autogratuity works across all delivery services, giving you a unified view of your performance</li>
+                        <li><strong>Advanced Spatial Intelligence</strong> - We don't just track addresses; we analyze neighborhoods, traffic patterns, and delivery clustering to optimize your routes</li>
+                        <li><strong>Tip Prediction Engine</strong> <span class="pro-badge">PRO</span> - Our proprietary algorithm predicts potential tip ranges based on historical data, helping you make informed decisions about which orders to accept</li>
+                        <li><strong>Bulk Data Import</strong> - Import your existing delivery history from Google Maps, spreadsheets, or other sources to build a robust dataset from day one</li>
+                        <li><strong>"Do Not Deliver" Flagging</strong> - Automatically mark problematic addresses to avoid future frustration and wasted time</li>
+                    </ul>
+                    <p>Most importantly, Autogratuity was built by delivery drivers for delivery drivers. We understand the challenges and opportunities of delivery work in a way that generic tracking apps simply can't match.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How does the automatic tip capture system work?</div>
+                <div class="faq-answer">
+                    <p>Our automatic tip capture system is the technological heart of Autogratuity:</p>
+                    <ol>
+                        <li><strong>Notification Analysis</strong> - With your permission, Autogratuity monitors for delivery app notifications that indicate new orders, deliveries, and tips</li>
+                        <li><strong>Intelligent Parsing</strong> - Our proprietary algorithm extracts relevant data from these notifications, including order IDs, addresses, and tip amounts</li>
+                        <li><strong>Contextual Matching</strong> - The system associates tips with the correct orders and addresses, even when they come hours or days later</li>
+                        <li><strong>Background Processing</strong> - All this happens automatically in the background, without requiring you to manually input anything</li>
+                    </ol>
+                    <p class="highlight">For optimal performance, ensure that you don't clear notifications until Autogratuity has processed them. The app will notify you when important delivery data has been captured.</p>
+                    <p>Pro users get enhanced capture capabilities with our <strong>Robust Capture Service</strong>, which provides redundant data collection methods to ensure no tip goes untracked.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Can I import my existing delivery history?</div>
+                <div class="faq-answer">
+                    <p>Yes! Autogratuity offers comprehensive data import capabilities:</p>
+                    <ul>
+                        <li><strong>Google Maps Integration</strong> - Import your saved delivery locations directly from Google Maps</li>
+                        <li><strong>GeoJSON Support</strong> - Export your delivery data from Google Maps as GeoJSON and import it with full location and note preservation</li>
+                        <li><strong>CSV Import</strong> <span class="pro-badge">PRO</span> - Import spreadsheet data with our flexible CSV mapper</li>
+                        <li><strong>Duplicate Detection</strong> - Our advanced system identifies and handles duplicate entries during import, with options to skip or update existing records</li>
+                    </ul>
+                    <p>During import, our intelligent system will attempt to extract tip information from notes and descriptions, automatically categorizing and organizing your historical data for immediate insights.</p>
+                    <div class="tip-visual">
+                        <strong>Pro Tip:</strong> Before importing, add tip amounts to your Google Maps location descriptions using the format "$X.XX" for the most accurate data extraction.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">What analytics and insights does Autogratuity provide?</div>
+                <div class="faq-answer">
+                    <p>Autogratuity transforms your delivery data into actionable insights:</p>
+                    <ul>
+                        <li><strong>Tip Heat Maps</strong> - Visualize high-tipping neighborhoods at a glance</li>
+                        <li><strong>Earnings Dashboard</strong> - Track your tip performance over time with detailed charts and trends</li>
+                        <li><strong>Customer Insights</strong> - View tip history for specific addresses to identify generous customers</li>
+                        <li><strong>Time Analysis</strong> <span class="pro-badge">PRO</span> - Discover which days and times yield the highest tips</li>
+                        <li><strong>Order Type Correlation</strong> <span class="pro-badge">PRO</span> - Learn which order types and stores correlate with better tips</li>
+                        <li><strong>Opportunity Scoring</strong> <span class="pro-badge">PRO</span> - Get instant scoring of new orders based on tip potential</li>
+                    </ul>
+                    <p>All analytics are presented in an intuitive, easy-to-understand format that helps you make quick decisions while on the go.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Technical Questions Section -->
+        <div class="faq-category">
+            <h3 class="category-title">Technical Questions</h3>
+            
+            <div class="faq-item">
+                <div class="faq-question">How does Autogratuity protect my data and privacy?</div>
+                <div class="faq-answer">
+                    <p>Your privacy and data security are our top priorities:</p>
+                    <ul>
+                        <li><strong>End-to-End Encryption</strong> - All your data is encrypted both in transit and at rest</li>
+                        <li><strong>Local Processing</strong> - Sensitive data processing happens on your device, not in the cloud</li>
+                        <li><strong>No Delivery App Credentials</strong> - We never ask for or store your login information for any delivery platforms</li>
+                        <li><strong>Anonymous Analytics</strong> - Any aggregate data used for app improvement is fully anonymized</li>
+                        <li><strong>Permission Transparency</strong> - We clearly explain why each permission is needed and how it's used</li>
+                    </ul>
+                    <p>Autogratuity complies with all applicable data protection regulations and undergoes regular security audits. Your delivery data belongs to you and is never sold to third parties.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How does the GeoJSON import validation system work?</div>
+                <div class="faq-answer">
+                    <p>Our GeoJSON import system includes sophisticated validation:</p>
+                    <ol>
+                        <li><strong>Pre-validation Check</strong> - Before processing, the system scans your GeoJSON file to ensure it contains valid location data</li>
+                        <li><strong>Duplicate Detection</strong> - The system compares imported addresses with existing records using both exact and fuzzy matching algorithms</li>
+                        <li><strong>Smart Data Extraction</strong> - Our parser identifies order IDs, tip amounts, and special instructions from location descriptions</li>
+                        <li><strong>Age-Based Validation</strong> - Older delivery records (>14 days) are automatically marked with appropriate status flags</li>
+                        <li><strong>Data Enrichment</strong> - Where possible, the system enhances imported data with additional context like normalized addresses</li>
+                    </ol>
+                    <p>During import, you'll have options to:</p>
+                    <ul>
+                        <li>Skip duplicate entries entirely</li>
+                        <li>Update existing records with new information</li>
+                        <li>Merge data when both records contain useful information</li>
+                    </ul>
+                    <p>Our validation system ensures that your imported data maintains its integrity while integrating seamlessly with your existing records.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Is Autogratuity compatible with my delivery apps?</div>
+                <div class="faq-answer">
+                    <p>Autogratuity is designed to work with all major delivery platforms:</p>
+                    <ul>
+                        <li>Shipt</li>
+                        <li>Instacart</li>
+                        <li>DoorDash</li>
+                        <li>UberEats</li>
+                        <li>Grubhub</li>
+                        <li>Amazon Flex</li>
+                        <li>Postmates</li>
+                        <li>And many more!</li>
+                    </ul>
+                    <p>Since Autogratuity works by monitoring notifications and location data, it doesn't need direct integration with these platforms. This means it continues to work even when delivery apps update their interfaces.</p>
+                    <p class="highlight">While basic functionality works with all delivery apps, our enhanced notification parsing is optimized for the most popular services. If you use a less common delivery service, you can still manually add deliveries or use our import features.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How does Autogratuity handle address verification?</div>
+                <div class="faq-answer">
+                    <p>Address verification is a crucial part of our data quality system:</p>
+                    <ul>
+                        <li><strong>Multi-Source Verification</strong> - Addresses captured from different sources (manual entry, automatic capture, imports) are cross-referenced</li>
+                        <li><strong>Pro Verification</strong> <span class="pro-badge">PRO</span> - Addresses verified through our Pro capture system receive a verification badge, indicating higher data confidence</li>
+                        <li><strong>Normalization</strong> - Addresses are standardized to ensure consistent formatting and matching</li>
+                        <li><strong>Geocoding Validation</strong> - Coordinates are verified against address data to ensure accuracy</li>
+                        <li><strong>Duplicate Reconciliation</strong> - When duplicates are found, the system intelligently merges the most reliable data points</li>
+                    </ul>
+                    <p>For Pro users, our system implements redundant verification using multiple data capture methods, ensuring the highest level of data accuracy possible.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pro Features Section -->
+        <div class="faq-category">
+            <h3 class="category-title">Pro Features</h3>
+            
+            <div class="faq-item">
+                <div class="faq-question">What additional benefits do Pro subscribers receive?</div>
+                <div class="faq-answer">
+                    <p>Autogratuity Pro unlocks the full potential of your delivery data:</p>
+                    <ul>
+                        <li><strong>Robust Capture Service</strong> - Enhanced background service with redundant capture methods ensures no deliveries or tips are missed</li>
+                        <li><strong>Advanced Analytics Dashboard</strong> - Gain access to time-based analysis, order type correlations, and predictive insights</li>
+                        <li><strong>Unlimited History</strong> - Store unlimited delivery records compared to the 100-record limit on free accounts</li>
+                        <li><strong>CSV Import/Export</strong> - Flexible data import and export capabilities for advanced users</li>
+                        <li><strong>Tip Prediction Engine</strong> - Our proprietary algorithm predicts tip potential for new orders</li>
+                        <li><strong>Priority Support</strong> - Get faster responses and dedicated assistance</li>
+                        <li><strong>No Ads</strong> - Enjoy an ad-free experience throughout the app</li>
+                    </ul>
+                    <p>Pro subscribers typically see a 15-25% increase in average tips by leveraging our advanced insights to make better decisions about which orders to accept.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How does the Pro Verification system enhance data quality?</div>
+                <div class="faq-answer">
+                    <p>Our Pro Verification system provides several data quality advantages:</p>
+                    <ol>
+                        <li><strong>Redundant Data Capture</strong> - Multiple capture methods run simultaneously, creating verification checkpoints</li>
+                        <li><strong>Cross-Reference Validation</strong> - Data points from different sources are compared for consistency</li>
+                        <li><strong>Visual Verification Indicators</strong> - Pro-verified data is marked with distinctive badges in the UI</li>
+                        <li><strong>Conflict Resolution</strong> - When data sources disagree, the system intelligently determines the most reliable information</li>
+                        <li><strong>Historical Confidence Scoring</strong> - Over time, the system builds confidence scores for addresses and customers</li>
+                    </ol>
+                    <p>This multi-layered approach gives Pro users the highest possible data accuracy, which is crucial for making informed decisions about which deliveries to accept.</p>
+                    <div class="highlight">
+                        Pro verification is especially valuable for drivers who work in areas with spotty cellular coverage, as the redundant systems help ensure data is captured even when connectivity is intermittent.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Is the Pro subscription worth the investment?</div>
+                <div class="faq-answer">
+                    <p>For active delivery drivers, the Pro subscription typically pays for itself very quickly:</p>
+                    <ul>
+                        <li><strong>Improved Earnings</strong> - Users report 15-25% higher average tips by focusing on high-value deliveries</li>
+                        <li><strong>Time Efficiency</strong> - Better route planning and order selection can save 5-10 hours monthly</li>
+                        <li><strong>Fuel Savings</strong> - Smarter routing and order clustering can reduce mileage by 10-15%</li>
+                        <li><strong>Stress Reduction</strong> - Avoiding known low-tip areas and problematic customers improves your work experience</li>
+                    </ul>
+                    <p>Consider this: If you make just $2 more per delivery through better decision-making, the Pro subscription pays for itself after just a few deliveries per month.</p>
+                    <p>We offer a 7-day free trial of Pro features so you can experience the benefits firsthand before committing.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Troubleshooting Section -->
+        <div class="faq-category">
+            <h3 class="category-title">Troubleshooting</h3>
+            
+            <div class="faq-item">
+                <div class="faq-question">Why aren't my tips being captured automatically?</div>
+                <div class="faq-answer">
+                    <p>If automatic tip capture isn't working, check these common issues:</p>
+                    <ol>
+                        <li><strong>Notification Access</strong> - Ensure Autogratuity has notification access permission</li>
+                        <li><strong>Background Restrictions</strong> - Check that battery optimization and data saver modes aren't restricting the app</li>
+                        <li><strong>Notification Format</strong> - Some delivery apps may have updated their notification format; report this to our support team</li>
+                        <li><strong>Clear Cache</strong> - Try clearing the app cache and restarting</li>
+                        <li><strong>App Updates</strong> - Ensure both Autogratuity and your delivery apps are updated to the latest versions</li>
+                    </ol>
+                    <p class="highlight">Pro subscribers have access to our Robust Capture Service, which uses multiple methods to capture tip data, significantly reducing missed captures.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Why aren't my imported markers showing on the map?</div>
+                <div class="faq-answer">
+                    <p>If markers aren't appearing after import, try these solutions:</p>
+                    <ol>
+                        <li><strong>Verify Import Completion</strong> - Check the import results summary to confirm data was successfully imported</li>
+                        <li><strong>Map Refresh</strong> - Use the refresh button in the map view to force a reload</li>
+                        <li><strong>Valid Coordinates</strong> - Ensure your imported data contains valid GPS coordinates</li>
+                        <li><strong>Filter Settings</strong> - Check if you have active filters that might be hiding certain markers</li>
+                        <li><strong>App Restart</strong> - Close and reopen the app to refresh all data</li>
+                    </ol>
+                    <p>If you're still experiencing issues, our enhanced validation system can identify and repair problematic location data. Use the "Validate Data" option in Settings → Data Management.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How can I prevent importing duplicate records?</div>
+                <div class="faq-answer">
+                    <p>Our system offers several options for handling duplicates during import:</p>
+                    <ol>
+                        <li><strong>Pre-Import Scan</strong> - Before finalizing any import, the system will scan for potential duplicates and show you a summary</li>
+                        <li><strong>Duplicate Options Dialog</strong> - You'll be presented with choices to:
+                            <ul>
+                                <li>Skip all duplicates (fastest option)</li>
+                                <li>Update existing records with new information</li>
+                                <li>Keep both records (not recommended)</li>
+                            </ul>
+                        </li>
+                        <li><strong>Smart Merge</strong> - If you choose to update existing records, our system intelligently combines the most reliable data from both sources</li>
+                    </ol>
+                    <p>For the most accurate duplicate detection, ensure that addresses in your import data are consistently formatted. Our system uses both exact matching and fuzzy logic to identify potential duplicates based on address similarity.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>&copy; 2025 Autogratuity. All rights reserved.</p>
+    </footer>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Select all FAQ questions
+            const questions = document.querySelectorAll('.faq-question');
+            
+            // Add click event listener to each question
+            questions.forEach(question => {
+                question.addEventListener('click', function() {
+                    // Toggle active class on the question
+                    this.classList.toggle('active');
+                    
+                    // Get the answer element
+                    const answer = this.nextElementSibling;
+                    
+                    // Toggle show class on the answer
+                    answer.classList.toggle('show');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

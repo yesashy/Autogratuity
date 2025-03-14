@@ -1,0 +1,28 @@
+// This file helps ensure dependencies are properly synchronized
+task syncDependencies {
+    doLast {
+        println "Synchronizing dependencies..."
+        
+        // Clear .gradle caches for problematic dependencies if needed
+        File cacheDir = new File(project.gradle.gradleUserHomeDir, "caches")
+        if (cacheDir.exists()) {
+            println "Cleaning selective caches for troublesome dependencies"
+            
+            // Example: clean specific cache for Google Maps
+            File mapsCache = new File(cacheDir, "modules-2/files-2.1/com.google.android.gms")
+            if (mapsCache.exists()) {
+                println "Cleaning Maps cache..."
+                mapsCache.deleteDir()
+            }
+            
+            // Example: clean specific cache for Gson
+            File gsonCache = new File(cacheDir, "modules-2/files-2.1/com.google.code.gson")
+            if (gsonCache.exists()) {
+                println "Cleaning Gson cache..."
+                gsonCache.deleteDir()
+            }
+        }
+        
+        println "Dependencies synchronized. Run 'gradlew clean build' now."
+    }
+}

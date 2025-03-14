@@ -6,11 +6,14 @@ import android.util.LruCache;
 
 import com.autogratuity.models.Address;
 import com.autogratuity.models.Delivery;
+import com.autogratuity.models.DeliveryData;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.TaskCompletionSource;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.SetOptions;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -360,5 +363,138 @@ public class CachedFirestoreRepository implements IFirestoreRepository {
     public Task<QuerySnapshot> getAddressesWithMultipleDeliveries(int minDeliveries) {
         // Could implement caching for this, but for simplicity pass through
         return baseRepository.getAddressesWithMultipleDeliveries(minDeliveries);
+    }
+    
+    /**
+     * Implement missing method from IFirestoreRepository interface
+     * @return The Firestore instance
+     */
+    @Override
+    public FirebaseFirestore getFirestore() {
+        return FirebaseFirestore.getInstance();
+    }
+    
+    /**
+     * Update the "Do Not Deliver" flag for an address
+     */
+    @Override
+    public Task<Void> updateAddressDoNotDeliver(String addressId, boolean doNotDeliver) {
+        // Pass through to base repository
+        Task<Void> task = baseRepository.updateAddressDoNotDeliver(addressId, doNotDeliver);
+        
+        // Invalidate related caches when the update completes
+        task.addOnSuccessListener(aVoid -> {
+            Log.d(TAG, "Invalidating address caches after doNotDeliver update");
+            // Invalidate specific address cache
+            invalidateCache(KEY_ADDRESS_PREFIX + addressId);
+        });
+        
+        return task;
+    }
+    
+    /**
+     * Save multiple deliveries in a batch
+     */
+    @Override
+    public Task<Void> batchAddDeliveries(List<Delivery> deliveries) {
+        // Pass through to base repository
+        return baseRepository.batchAddDeliveries(deliveries);
+    }
+    
+    /**
+     * Save multiple addresses in a batch
+     */
+    @Override
+    public Task<Void> batchAddAddresses(List<Address> addresses) {
+        // Pass through to base repository
+        return baseRepository.batchAddAddresses(addresses);
+    }
+    
+    /**
+     * Find addresses near a location
+     */
+    @Override
+    public Task<QuerySnapshot> getAddressesNearLocation(double latitude, double longitude, double radiusKm) {
+        // This is a geospatial query that may be expensive - don't cache for simplicity
+        return baseRepository.getAddressesNearLocation(latitude, longitude, radiusKm);
+    }
+    
+    /**
+     * Batch save DeliveryData objects
+     * Required for GeoJsonImportUtil
+     */
+    @Override
+    public Task<Void> batchSaveDeliveries(List<DeliveryData> deliveries) {
+        // Pass through to base repository
+        return baseRepository.batchSaveDeliveries(deliveries);
+    }
+    
+    /**
+     * Notify listeners that data has changed
+     */
+    @Override
+    public void notifyDataChanged() {
+        baseRepository.notifyDataChanged();
+    }
+    
+    /**
+     * Mark a delivery as verified
+     */
+    @Override
+    public Task<Void> markAsVerified(String deliveryId, boolean verified) {
+        // Create update data
+        Map<String, Object> updateData = new HashMap<>();
+        updateData.put("tipData.verified", verified);
+        
+        if (verified) {
+            updateData.put("verification.verifiedByPro", true);
+            updateData.put("verification.verificationTimestamp", new Timestamp(new Date()));
+        }
+        
+        // Get Firestore reference
+        FirebaseFirestore db = getFirestore();
+        
+        // Update document
+        return db.collection("deliveries")
+                .document(deliveryId)
+                .set(updateData, SetOptions.merge())
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Successfully updated verification status for " + deliveryId);
+                    // Invalidate cache for this delivery
+                    invalidateCache(KEY_DELIVERY_PREFIX + deliveryId);
+                })
+                .addOnFailureListener(e -> 
+                        Log.e(TAG, "Error updating verification status: " + e.getMessage()));
+    }
+    
+    /**
+     * Update verification status with source and notes
+     */
+    @Override
+    public Task<Void> updateVerificationStatus(String deliveryId, String source, String notes) {
+        // Create update data
+        Map<String, Object> updateData = new HashMap<>();
+        updateData.put("verification.verifiedByPro", true);
+        updateData.put("verification.verificationTimestamp", new Timestamp(new Date()));
+        updateData.put("verification.verificationSource", source);
+        
+        if (notes != null && !notes.isEmpty()) {
+            updateData.put("verification.verificationNotes", notes);
+        }
+        
+        // Get Firestore reference
+        FirebaseFirestore db = getFirestore();
+        
+        // Update document
+        return db.collection("deliveries")
+                .document(deliveryId)
+                .set(updateData, SetOptions.merge())
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Successfully updated verification details for " + deliveryId);
+                    // Invalidate cache for this delivery
+                    invalidateCache(KEY_DELIVERY_PREFIX + deliveryId);
+                })
+                .addOnFailureListener(e -> 
+                        Log.e(TAG, "Error updating verification details: " + e.getMessage()));
     }
 }

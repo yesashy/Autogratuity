@@ -1,270 +1,230 @@
 package com.autogratuity.models;
 
-import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.GeoPoint;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
  * Model class for address data
  */
-public class Address extends FirestoreModel {
+public class Address {
     private String id;
     private String fullAddress;
     private String normalizedAddress;
-    private List<String> orderIds;
-    private double totalTips;
+    private Coordinates coordinates;
     private int deliveryCount;
     private double averageTip;
-    private String userId;
     private boolean doNotDeliver;
-    private List<String> searchTerms;
-    private Timestamp lastUpdated;
-    private GeoPoint geoPoint;
-    
-    // Empty constructor for Firestore
+    private long lastDeliveryTimestamp;
+    private String notes;
+
+    /**
+     * Default constructor
+     */
     public Address() {
-        this.orderIds = new ArrayList<>();
-        this.searchTerms = new ArrayList<>();
-        this.totalTips = 0.0;
+        this.id = "";
+        this.fullAddress = "";
+        this.normalizedAddress = "";
+        this.coordinates = new Coordinates();
         this.deliveryCount = 0;
         this.averageTip = 0.0;
         this.doNotDeliver = false;
-        this.lastUpdated = Timestamp.now();
+        this.lastDeliveryTimestamp = System.currentTimeMillis();
+        this.notes = "";
     }
-    
+
     /**
-     * Create Address from Firestore document
+     * Create Address from a Firestore document
+     *
+     * @param document Firestore document
+     * @return Address object
      */
-    public static Address fromDocument(DocumentSnapshot doc) {
-        if (doc == null) return null;
-        
+    public static Address fromDocument(DocumentSnapshot document) {
+        if (document == null || !document.exists()) {
+            return null;
+        }
+
         Address address = new Address();
-        address.id = doc.getId();
-        
-        // Extract basic fields
-        address.fullAddress = doc.getString("fullAddress");
-        address.normalizedAddress = doc.getString("normalizedAddress");
-        address.userId = doc.getString("userId");
-        
-        // Extract analytics
-        if (doc.contains("totalTips")) {
-            address.totalTips = doc.getDouble("totalTips") != null ? doc.getDouble("totalTips") : 0.0;
+        address.setId(document.getId());
+
+        if (document.contains("fullAddress") && document.get("fullAddress") != null) {
+            address.setFullAddress(document.getString("fullAddress"));
         }
-        
-        if (doc.contains("deliveryCount")) {
-            Object deliveryCountObj = doc.get("deliveryCount");
-            if (deliveryCountObj instanceof Long) {
-                address.deliveryCount = ((Long) deliveryCountObj).intValue();
-            } else if (deliveryCountObj instanceof Integer) {
-                address.deliveryCount = (Integer) deliveryCountObj;
-            } else {
-                address.deliveryCount = 0;
+
+        if (document.contains("normalizedAddress") && document.get("normalizedAddress") != null) {
+            address.setNormalizedAddress(document.getString("normalizedAddress"));
+        }
+
+        if (document.contains("geoPoint") && document.get("geoPoint") != null) {
+            GeoPoint geoPoint = document.getGeoPoint("geoPoint");
+            if (geoPoint != null) {
+                address.setCoordinates(Coordinates.fromGeoPoint(geoPoint));
+            }
+        } else if (document.contains("coordinates") && document.get("coordinates") != null) {
+            String coordsStr = document.getString("coordinates");
+            if (coordsStr != null && coordsStr.contains(",")) {
+                String[] parts = coordsStr.split(",");
+                try {
+                    double lat = Double.parseDouble(parts[0]);
+                    double lng = Double.parseDouble(parts[1]);
+                    address.setCoordinates(new Coordinates(lat, lng));
+                } catch (NumberFormatException e) {
+                    // Invalid coordinates
+                }
             }
         }
-        
-        if (doc.contains("averageTip")) {
-            address.averageTip = doc.getDouble("averageTip") != null ? doc.getDouble("averageTip") : 0.0;
+
+        if (document.contains("deliveryCount") && document.get("deliveryCount") != null) {
+            address.setDeliveryCount(document.getLong("deliveryCount").intValue());
         }
-        
-        // Extract flags
-        if (doc.contains("doNotDeliver")) {
-            address.doNotDeliver = Boolean.TRUE.equals(doc.getBoolean("doNotDeliver"));
+
+        if (document.contains("averageTip") && document.get("averageTip") != null) {
+            address.setAverageTip(document.getDouble("averageTip"));
         }
-        
-        // Extract lists
-        if (doc.contains("orderIds")) {
-            Object orderIdsObj = doc.get("orderIds");
-            if (orderIdsObj instanceof List) {
-                address.orderIds = (List<String>) orderIdsObj;
-            } else {
-                address.orderIds = new ArrayList<>();
-            }
-        } else {
-            address.orderIds = new ArrayList<>();
+
+        if (document.contains("doNotDeliver") && document.get("doNotDeliver") != null) {
+            address.setDoNotDeliver(document.getBoolean("doNotDeliver"));
         }
-        
-        if (doc.contains("searchTerms")) {
-            Object searchTermsObj = doc.get("searchTerms");
-            if (searchTermsObj instanceof List) {
-                address.searchTerms = (List<String>) searchTermsObj;
-            } else {
-                address.searchTerms = new ArrayList<>();
-            }
-        } else {
-            address.searchTerms = new ArrayList<>();
+
+        if (document.contains("lastDeliveryTimestamp") && document.get("lastDeliveryTimestamp") != null) {
+            address.setLastDeliveryTimestamp(document.getLong("lastDeliveryTimestamp"));
         }
-        
-        // Extract timestamp
-        address.lastUpdated = doc.getTimestamp("lastUpdated");
-        if (address.lastUpdated == null) {
-            address.lastUpdated = Timestamp.now();
+
+        if (document.contains("notes") && document.get("notes") != null) {
+            address.setNotes(document.getString("notes"));
         }
-        
-        // Extract geo point
-        if (doc.contains("geoPoint")) {
-            address.geoPoint = doc.getGeoPoint("geoPoint");
-        }
-        
+
         return address;
     }
-    
+
     /**
-     * Convert to Firestore document
+     * Convert to Firestore data
+     *
+     * @return Map of data
      */
-    public Map<String, Object> toDocument() {
-        Map<String, Object> doc = new HashMap<>();
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("fullAddress", fullAddress);
+        map.put("normalizedAddress", normalizedAddress);
         
-        // Basic fields
-        doc.put("fullAddress", fullAddress);
-        doc.put("normalizedAddress", normalizedAddress);
-        doc.put("userId", userId);
-        
-        // Analytics
-        doc.put("totalTips", totalTips);
-        doc.put("deliveryCount", deliveryCount);
-        doc.put("averageTip", averageTip);
-        
-        // Flags
-        doc.put("doNotDeliver", doNotDeliver);
-        
-        // Lists
-        doc.put("orderIds", orderIds != null ? orderIds : new ArrayList<>());
-        doc.put("searchTerms", searchTerms != null ? searchTerms : new ArrayList<>());
-        
-        // Timestamp
-        doc.put("lastUpdated", lastUpdated != null ? lastUpdated : Timestamp.now());
-        
-        // Geo point
-        if (geoPoint != null) {
-            doc.put("geoPoint", geoPoint);
+        // Add GeoPoint if coordinates exist
+        if (coordinates != null) {
+            map.put("geoPoint", coordinates.toGeoPoint());
+            map.put("coordinates", coordinates.toString());
         }
         
-        return doc;
+        map.put("deliveryCount", deliveryCount);
+        map.put("averageTip", averageTip);
+        map.put("doNotDeliver", doNotDeliver);
+        map.put("lastDeliveryTimestamp", lastDeliveryTimestamp);
+        map.put("notes", notes);
+        return map;
     }
-    
+
+    /**
+     * Get GeoPoint representation of coordinates
+     *
+     * @return GeoPoint
+     */
+    public GeoPoint getGeoPoint() {
+        return (coordinates != null) ? coordinates.toGeoPoint() : null;
+    }
+
     // Getters and setters
-    
+
     public String getId() {
         return id;
     }
-    
+
     public void setId(String id) {
         this.id = id;
     }
-    
+
     public String getFullAddress() {
         return fullAddress;
     }
-    
+
     public void setFullAddress(String fullAddress) {
         this.fullAddress = fullAddress;
     }
-    
+
     public String getNormalizedAddress() {
         return normalizedAddress;
     }
-    
+
     public void setNormalizedAddress(String normalizedAddress) {
         this.normalizedAddress = normalizedAddress;
     }
-    
-    public List<String> getOrderIds() {
-        return orderIds;
+
+    public Coordinates getCoordinates() {
+        return coordinates;
     }
-    
-    public void setOrderIds(List<String> orderIds) {
-        this.orderIds = orderIds;
+
+    public void setCoordinates(Coordinates coordinates) {
+        this.coordinates = coordinates;
     }
-    
-    public double getTotalTips() {
-        return totalTips;
-    }
-    
-    public void setTotalTips(double totalTips) {
-        this.totalTips = totalTips;
-    }
-    
+
     public int getDeliveryCount() {
         return deliveryCount;
     }
-    
+
     public void setDeliveryCount(int deliveryCount) {
         this.deliveryCount = deliveryCount;
     }
-    
+
     public double getAverageTip() {
         return averageTip;
     }
-    
+
     public void setAverageTip(double averageTip) {
         this.averageTip = averageTip;
     }
-    
-    public String getUserId() {
-        return userId;
-    }
-    
-    public void setUserId(String userId) {
-        this.userId = userId;
-    }
-    
+
     public boolean isDoNotDeliver() {
         return doNotDeliver;
     }
-    
+
     public void setDoNotDeliver(boolean doNotDeliver) {
         this.doNotDeliver = doNotDeliver;
     }
-    
-    public List<String> getSearchTerms() {
-        return searchTerms;
+
+    public long getLastDeliveryTimestamp() {
+        return lastDeliveryTimestamp;
     }
-    
-    public void setSearchTerms(List<String> searchTerms) {
-        this.searchTerms = searchTerms;
+
+    public void setLastDeliveryTimestamp(long lastDeliveryTimestamp) {
+        this.lastDeliveryTimestamp = lastDeliveryTimestamp;
     }
-    
-    public Timestamp getLastUpdated() {
-        return lastUpdated;
+
+    public String getNotes() {
+        return notes;
     }
-    
-    public void setLastUpdated(Timestamp lastUpdated) {
-        this.lastUpdated = lastUpdated;
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
-    
-    public GeoPoint getGeoPoint() {
-        return geoPoint;
-    }
-    
-    public void setGeoPoint(GeoPoint geoPoint) {
-        this.geoPoint = geoPoint;
-    }
-    
+
     /**
-     * Add an order ID to the list
+     * Increment delivery count
      */
-    public void addOrderId(String orderId) {
-        if (orderIds == null) {
-            orderIds = new ArrayList<>();
-        }
-        
-        if (!orderIds.contains(orderId)) {
-            orderIds.add(orderId);
-        }
+    public void incrementDeliveryCount() {
+        this.deliveryCount++;
     }
-    
+
     /**
-     * Update the statistics with a new tip
+     * Update average tip with a new tip amount
+     *
+     * @param newTipAmount New tip amount to include in average
      */
-    public void updateWithTip(double tipAmount) {
-        this.totalTips += tipAmount;
-        this.deliveryCount += 1;
-        this.averageTip = this.totalTips / this.deliveryCount;
-        this.lastUpdated = Timestamp.now();
+    public void updateAverageTip(double newTipAmount) {
+        if (deliveryCount <= 0) {
+            averageTip = newTipAmount;
+        } else {
+            double total = averageTip * deliveryCount;
+            total += newTipAmount;
+            averageTip = total / (deliveryCount + 1);
+        }
     }
 }
