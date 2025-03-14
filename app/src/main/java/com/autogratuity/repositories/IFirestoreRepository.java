@@ -5,10 +5,12 @@ import com.autogratuity.models.Delivery;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface for Firestore repository operations
@@ -27,6 +29,14 @@ public interface IFirestoreRepository {
     Task<Void> updateAddressStatistics(String addressId, double tipAmount, String orderId);
     Task<DocumentReference> addAddress(Address address);
     Task<List<Address>> getAddressesBySearchTerm(String searchTerm, int limit);
+    Task<Void> updateAddressDoNotDeliver(String addressId, boolean doNotDeliver);
+    
+    // Batch operations for bulk import
+    Task<Void> batchAddDeliveries(List<Delivery> deliveries);
+    Task<Void> batchAddAddresses(List<Address> addresses);
+    
+    // Geo-based queries
+    Task<QuerySnapshot> getAddressesNearLocation(double latitude, double longitude, double radiusKm);
     
     // Cache operations
     void setDirty(boolean isDirty);
@@ -46,4 +56,7 @@ public interface IFirestoreRepository {
     Task<QuerySnapshot> getRecentDeliveries(int limit);
     Task<QuerySnapshot> getDeliveriesWithoutTips(Timestamp cutoffDate);
     Task<QuerySnapshot> getAddressesWithMultipleDeliveries(int minDeliveries);
+    
+    // Utility method to access the Firestore instance directly when needed
+    FirebaseFirestore getFirestore();
 }

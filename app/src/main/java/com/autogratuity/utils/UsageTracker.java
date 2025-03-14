@@ -49,6 +49,9 @@ public class UsageTracker {
         
         // Get subscription manager
         subscriptionManager = SubscriptionManager.getInstance(context);
+        
+        // Check if user is Pro
+        isPro = subscriptionManager.isProUser();
     }
     
     /**
@@ -131,6 +134,11 @@ public class UsageTracker {
      * Record a mapping action
      */
     public void recordMapping() {
+        // Don't increment if user is Pro
+        if (isPro) {
+            return;
+        }
+        
         // Increment the local count
         mappingCount++;
         
@@ -196,6 +204,13 @@ public class UsageTracker {
         }
         
         return Math.max(0, FREE_TIER_MAPPING_LIMIT - mappingCount);
+    }
+    
+    /**
+     * Check if the user has Pro status
+     */
+    public boolean isPro() {
+        return isPro;
     }
     
     /**

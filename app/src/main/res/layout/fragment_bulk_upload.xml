@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/gray_900"
+    android:fillViewport="true"
     android:padding="16dp">
 
     <LinearLayout
@@ -12,14 +13,14 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Explanation Card -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/instructions_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="8dp"
             app:cardBackgroundColor="@color/gray_800"
-            app:cardElevation="0dp">
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -30,80 +31,118 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Bulk Upload from Google Maps"
+                    android:text="Import Delivery Data"
                     android:textColor="@color/white"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp"/>
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Autogratuity allows you to import your existing delivery locations from Google Maps to quickly populate your database. This feature uses your saved place markers to extract Order IDs and any existing tip information."
-                    android:textColor="@color/white"
-                    android:layout_marginBottom="12dp" />
+                    android:layout_marginTop="8dp"
+                    android:text="Import your delivery data from Google Maps exports to build your tip map quickly."
+                    android:textColor="@color/gray_300" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="To export your data from Google Maps: Open Google Maps on your computer > Click 'Your Places' > Maps > Select your delivery map > Click the three-dot menu > Export to KML/KMZ. Once downloaded, use the button below to import this file into Autogratuity."
+                    android:layout_marginTop="16dp"
+                    android:text="GeoJSON Format (Recommended)"
                     android:textColor="@color/white"
-                    android:layout_marginBottom="12dp" />
+                    android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="For best results, ensure your map pins contain Order IDs in their labels. Autogratuity will automatically extract Order IDs and any tip information present in the labels. After importing, the app will automatically update these orders with new tips as they arrive via Shipt notifications."
-                    android:textColor="@color/white"
-                    android:layout_marginBottom="16dp" />
+                    android:layout_marginTop="4dp"
+                    android:text="1. Export your Google Maps places using Google Takeout\n2. Select the file ending with 'Labeled places.json'\n3. Import to automatically extract order IDs and tip information from your labels"
+                    android:textColor="@color/gray_300" />
 
-                <androidx.cardview.widget.CardView
+                <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    app:cardBackgroundColor="@color/gray_700"
-                    app:cardCornerRadius="4dp">
+                    android:layout_marginTop="16dp"
+                    android:text="KML Format (Legacy)"
+                    android:textColor="@color/white"
+                    android:textStyle="bold" />
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="12dp"
-                        android:textColor="@color/gray_300"
-                        android:fontFamily="monospace"
-                        android:text="Compatible formats: KML, KMZ\nExpected label format: Order ID (e.g., '318996384') or Order ID with tip (e.g., '318996384 | $5 Tip')\nCoordinates are preserved for map visualization\nProcessing may take a few moments for large files" />
-                </androidx.cardview.widget.CardView>
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="1. Export your Google Maps places as KML/KMZ\n2. Import to process order IDs in your place labels"
+                    android:textColor="@color/gray_300" />
+
             </LinearLayout>
+
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Upload Button Card -->
-        <com.google.android.material.card.MaterialCardView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="8dp"
-            app:cardBackgroundColor="@color/gray_800"
-            app:cardElevation="0dp">
+            android:layout_marginBottom="16dp"
+            android:orientation="horizontal">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/import_geojson_button"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:gravity="center">
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="@color/blue_600"
+                android:text="Import GeoJSON"
+                android:textColor="@color/white"
+                app:cornerRadius="8dp"
+                app:icon="@drawable/ic_upload"
+                app:iconGravity="textStart" />
 
-                <Button
-                    android:id="@+id/upload_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Select KML/KMZ File"
-                    android:textColor="@color/white"
-                    android:paddingStart="24dp"
-                    android:paddingEnd="24dp"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp"
-                    app:icon="@drawable/ic_upload"
-                    app:iconGravity="textStart"
-                    android:backgroundTint="@color/purple_500"/>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/import_kml_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="@color/gray_700"
+                android:text="Import KML/KMZ"
+                android:textColor="@color/white"
+                app:cornerRadius="8dp"
+                app:icon="@drawable/ic_upload"
+                app:iconGravity="textStart" />
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="40dp">
+
+            <TextView
+                android:id="@+id/status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:textColor="@color/white"
+                android:visibility="gone"
+                tools:text="Importing data..."
+                tools:visibility="visible" />
+
+            <ProgressBar
+                android:id="@+id/progress_bar"
+                style="?android:attr/progressBarStyle"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_vertical|end"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/results_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
     </LinearLayout>
+
 </androidx.core.widget.NestedScrollView>
