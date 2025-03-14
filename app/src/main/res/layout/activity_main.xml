@@ -133,7 +133,7 @@
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:backgroundTint="@color/gray_800"
-        android:src="@drawable/ic_swap_apps"
+        android:src="@drawable/ic_swap_app"
         app:borderWidth="0dp"
         app:fabCustomSize="52dp"
         app:tint="@color/white"

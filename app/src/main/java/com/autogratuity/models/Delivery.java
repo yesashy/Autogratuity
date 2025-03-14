@@ -1,3 +1,5 @@
+// File: app/src/main/java/com/autogratuity/models/Delivery.java
+
 package com.autogratuity.models;
 
 import com.google.firebase.Timestamp;
@@ -110,7 +112,7 @@ public class Delivery extends FirestoreModel {
         doc.put("orderId", orderId);
         doc.put("userId", userId);
 
-        // Address data
+        // Address data - platform-agnostic structure
         Map<String, Object> addressMap = new HashMap<>();
         addressMap.put("fullAddress", address);
         addressMap.put("normalized", address != null ? address.toLowerCase().trim() : "");
@@ -129,7 +131,7 @@ public class Delivery extends FirestoreModel {
         }
         doc.put("address", addressMap);
 
-        // Dates
+        // Dates - consistent structure for cross-platform
         Map<String, Object> dates = new HashMap<>();
         dates.put("created", importDate != null ? importDate : Timestamp.now());
         dates.put("accepted", deliveryDate);
@@ -155,11 +157,10 @@ public class Delivery extends FirestoreModel {
         if (store != null) doc.put("store", store);
         if (location != null) doc.put("location", location);
 
-        // Metadata
+        // Metadata for app info and versioning
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("source", source != null ? source : "manual");
         metadata.put("platform", "android");
-        metadata.put("captureId", null);
         metadata.put("version", 1);
         doc.put("metadata", metadata);
 

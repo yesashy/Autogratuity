@@ -1,14 +1,15 @@
 package com.autogratuity;
 
 import android.app.Notification;
+import android.content.SharedPreferences;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import android.text.TextUtils;
 import android.util.Log;
 import android.os.Bundle;
 
-import com.google.firebase.Timestamp;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
+import com.autogratuity.repositories.IFirestoreRepository;
+import com.autogratuity.repositories.FirestoreRepository;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,25 +18,73 @@ import java.util.regex.Pattern;
 
 public class ShiptNotificationListenerService extends NotificationListenerService {
     private static final String TAG = "ShiptNotifListener";
-    private static final String[] SHIPT_PACKAGES = {
+
+    // Default package patterns
+    private String[] shiptPackages = {
             "com.shipt.shopper", // Shipt shopper app
             "com.shipt", // Main Shipt app
-            "com.shipt.user" // Possible Shipt user app
+            "com.shipt.user", // Possible Shipt user app
+            "com.shipt.consumer", // Another possible variant
+            "shipt.test" // For testing purposes
     };
 
-    // Updated regex patterns to match the actual notification formats
-    private static final Pattern TIP_PATTERN = Pattern.compile("You got a \\$(\\d+\\.\\d+) tip for an order delivered on .+ \\(#([A-Z0-9]+)\\)");
-    // Alternate patterns to catch variations
-    private static final Pattern ALTERNATE_TIP_PATTERN_1 = Pattern.compile("You received a \\$(\\d+\\.\\d+) tip for order #([A-Z0-9]+)");
-    private static final Pattern ALTERNATE_TIP_PATTERN_2 = Pattern.compile("Order #([A-Z0-9]+).*tipped \\$(\\d+\\.\\d+)");
+    // Enhanced set of regex patterns for tip notifications
+    private String[] tipPatterns = {
+            "You got a \\$(\\d+\\.\\d+) tip for an order delivered on .+ \\(#([A-Z0-9]+)\\)",
+            "You received a \\$(\\d+\\.\\d+) tip for order #([A-Z0-9]+)",
+            "Order #([A-Z0-9]+).*tipped \\$(\\d+\\.\\d+)",
+            "([A-Z0-9]+).*tipped you \\$(\\d+\\.\\d+)",
+            "Your customer left a \\$(\\d+\\.\\d+) tip.*#([A-Z0-9]+)",
+            "You've received a \\$(\\d+\\.\\d+) tip.*([A-Z0-9]+)",
+            "\\$(\\d+\\.\\d+) tip.*order.*([A-Z0-9]+)",
+            "New tip.*\\$(\\d+\\.\\d+).*#([A-Z0-9]+)"
+    };
 
-    private FirebaseFirestore db;
+    // Generic patterns to extract order IDs
+    private String[] orderIdPatterns = {
+            "#([A-Z0-9]+)",
+            "Order ([A-Z0-9]+)",
+            "order ([A-Z0-9]+)",
+            "\\(#([A-Z0-9]+)\\)",
+            "ID\\s*[:#]?\\s*([A-Z0-9]+)",
+            "([A-Z0-9]{8,12})" // Most Shipt order IDs are 8-12 alphanumeric chars
+    };
+
+    // Compiled patterns cache
+    private final Map<String, Pattern> compiledPatterns = new HashMap<>();
+    private IFirestoreRepository repository;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        db = FirebaseFirestore.getInstance();
+        repository = FirestoreRepository.getInstance();
+
+        // Load any saved custom patterns
+        loadCustomPatterns();
+
         Log.d(TAG, "Notification listener service created");
+    }
+
+    private void loadCustomPatterns() {
+        // Load saved patterns from SharedPreferences
+        SharedPreferences prefs = getSharedPreferences("notification_patterns", MODE_PRIVATE);
+        String savedPackages = prefs.getString("shipt_packages", null);
+        String savedTipPatterns = prefs.getString("tip_patterns", null);
+        String savedOrderPatterns = prefs.getString("order_patterns", null);
+
+        if (savedPackages != null && !savedPackages.isEmpty()) {
+            shiptPackages = savedPackages.split(",");
+        }
+
+        if (savedTipPatterns != null && !savedTipPatterns.isEmpty()) {
+            tipPatterns = savedTipPatterns.split("\\|\\|");
+            compiledPatterns.clear();
+        }
+
+        if (savedOrderPatterns != null && !savedOrderPatterns.isEmpty()) {
+            orderIdPatterns = savedOrderPatterns.split("\\|\\|");
+            compiledPatterns.clear();
+        }
     }
 
     @Override
@@ -43,17 +92,11 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
         if (sbn == null || sbn.getPackageName() == null) return;
 
         // Check if notification is from any of the Shipt packages
-        boolean isShiptNotification = false;
-        for (String shipPackage : SHIPT_PACKAGES) {
-            if (shipPackage.equals(sbn.getPackageName())) {
-                isShiptNotification = true;
-                break;
-            }
-        }
+        boolean isShiptNotification = isShiptPackage(sbn.getPackageName());
 
         if (isShiptNotification) {
             try {
-                Log.d(TAG, "Shipt notification received");
+                Log.d(TAG, "Shipt notification received from: " + sbn.getPackageName());
 
                 Notification notification = sbn.getNotification();
                 if (notification == null) return;
@@ -70,82 +113,28 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
                 // Combined text for better pattern matching
                 String fullText = title + " " + text;
 
-                Log.d(TAG, "Title: " + title);
-                Log.d(TAG, "Text: " + text);
-                Log.d(TAG, "Full text for matching: " + fullText);
+                // Save this notification for later analysis
+                saveNotificationForAnalysis(sbn.getPackageName(), title, text);
 
-                // Check if this is a tip notification
-                if (title.contains("tip") || text.contains("tip") ||
-                        title.contains("Tip") || text.contains("Tip")) {
+                Log.d(TAG, "Processing notification - Title: " + title);
+                Log.d(TAG, "Processing notification - Text: " + text);
 
-                    String orderId = null;
-                    String tipAmountStr = null;
-                    boolean matched = false;
+                // Check if this contains tip information using multiple patterns
+                Map<String, String> extractedData = extractDataFromNotification(fullText);
 
-                    // Try all patterns
-                    Matcher matcher = TIP_PATTERN.matcher(fullText);
-                    if (matcher.find()) {
-                        tipAmountStr = matcher.group(1);
-                        orderId = matcher.group(2);
-                        matched = true;
-                        Log.d(TAG, "Matched main pattern");
+                String orderId = extractedData.get("orderId");
+                String tipAmountStr = extractedData.get("tipAmount");
+
+                if (orderId != null && tipAmountStr != null) {
+                    try {
+                        double tipAmount = Double.parseDouble(tipAmountStr);
+                        Log.d(TAG, "Successfully parsed tip: $" + tipAmount + " for order #" + orderId);
+                        processTip(orderId, tipAmount);
+                    } catch (NumberFormatException e) {
+                        Log.e(TAG, "Error parsing tip amount: " + tipAmountStr, e);
                     }
-
-                    if (!matched) {
-                        matcher = ALTERNATE_TIP_PATTERN_1.matcher(fullText);
-                        if (matcher.find()) {
-                            tipAmountStr = matcher.group(1);
-                            orderId = matcher.group(2);
-                            matched = true;
-                            Log.d(TAG, "Matched alternate pattern 1");
-                        }
-                    }
-
-                    if (!matched) {
-                        matcher = ALTERNATE_TIP_PATTERN_2.matcher(fullText);
-                        if (matcher.find()) {
-                            orderId = matcher.group(1);
-                            tipAmountStr = matcher.group(2);
-                            matched = true;
-                            Log.d(TAG, "Matched alternate pattern 2");
-                        }
-                    }
-
-                    // If no pattern matched but contains both "tip" and "#", try to extract from text
-                    if (!matched && text.contains("tip") && text.contains("#")) {
-                        Log.d(TAG, "Attempting to extract data from unmatched pattern");
-                        // Extract the order ID (anything after # until a non-alphanumeric character)
-                        Pattern orderPattern = Pattern.compile("#([A-Z0-9]+)");
-                        Matcher orderMatcher = orderPattern.matcher(text);
-                        if (orderMatcher.find()) {
-                            orderId = orderMatcher.group(1);
-                        }
-
-                        // Extract the tip amount (any dollar amount)
-                        Pattern amountPattern = Pattern.compile("\\$(\\d+\\.\\d+)");
-                        Matcher amountMatcher = amountPattern.matcher(text);
-                        if (amountMatcher.find()) {
-                            tipAmountStr = amountMatcher.group(1);
-                        }
-
-                        if (orderId != null && tipAmountStr != null) {
-                            matched = true;
-                            Log.d(TAG, "Extracted data from unmatched pattern");
-                        }
-                    }
-
-                    if (matched && orderId != null && tipAmountStr != null) {
-                        // Process the tip information
-                        try {
-                            double tipAmount = Double.parseDouble(tipAmountStr);
-                            Log.d(TAG, "Successfully parsed tip: $" + tipAmount + " for order #" + orderId);
-                            processTip(orderId, tipAmount);
-                        } catch (NumberFormatException e) {
-                            Log.e(TAG, "Error parsing tip amount: " + tipAmountStr, e);
-                        }
-                    } else {
-                        Log.d(TAG, "No matching pattern found in tip notification");
-                    }
+                } else {
+                    Log.d(TAG, "No matching pattern found in notification");
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error processing notification", e);
@@ -153,50 +142,132 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
         }
     }
 
+    private boolean isShiptPackage(String packageName) {
+        for (String shiptPackage : shiptPackages) {
+            if (shiptPackage.equals(packageName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Map<String, String> extractDataFromNotification(String fullText) {
+        Map<String, String> data = new HashMap<>();
+
+        // Try all tip patterns first
+        for (String patternStr : tipPatterns) {
+            Pattern pattern = getCompiledPattern(patternStr);
+            Matcher matcher = pattern.matcher(fullText);
+
+            if (matcher.find()) {
+                try {
+                    if (matcher.groupCount() >= 2) {
+                        // Most patterns have tipAmount as group 1, orderId as group 2
+                        data.put("tipAmount", matcher.group(1));
+                        data.put("orderId", matcher.group(2));
+                    } else if (matcher.groupCount() == 1) {
+                        // Some patterns might just have one group - try to detect what it is
+                        String match = matcher.group(1);
+                        if (match.matches("\\d+\\.\\d+")) {
+                            data.put("tipAmount", match);
+                        } else {
+                            data.put("orderId", match);
+                        }
+                    }
+
+                    // If we found both, return immediately
+                    if (data.containsKey("tipAmount") && data.containsKey("orderId")) {
+                        return data;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error extracting data from match: " + e.getMessage());
+                }
+            }
+        }
+
+        // If we still need orderId, try specific patterns
+        if (!data.containsKey("orderId")) {
+            for (String patternStr : orderIdPatterns) {
+                Pattern pattern = getCompiledPattern(patternStr);
+                Matcher matcher = pattern.matcher(fullText);
+
+                if (matcher.find() && matcher.groupCount() >= 1) {
+                    data.put("orderId", matcher.group(1));
+                    break;
+                }
+            }
+        }
+
+        // If we still need tipAmount, try to find any dollar amount
+        if (!data.containsKey("tipAmount")) {
+            Pattern dollarPattern = getCompiledPattern("\\$(\\d+\\.\\d+)");
+            Matcher matcher = dollarPattern.matcher(fullText);
+
+            if (matcher.find() && matcher.groupCount() >= 1) {
+                data.put("tipAmount", matcher.group(1));
+            }
+        }
+
+        return data;
+    }
+
+    private Pattern getCompiledPattern(String patternStr) {
+        if (!compiledPatterns.containsKey(patternStr)) {
+            compiledPatterns.put(patternStr, Pattern.compile(patternStr));
+        }
+        return compiledPatterns.get(patternStr);
+    }
+
+    private void saveNotificationForAnalysis(String packageName, String title, String text) {
+        // Save notification content to SharedPreferences for later analysis
+        SharedPreferences prefs = getSharedPreferences("notification_analysis", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+
+        // Create unique key based on timestamp
+        String key = "notification_" + System.currentTimeMillis();
+
+        editor.putString(key + "_package", packageName);
+        editor.putString(key + "_title", title);
+        editor.putString(key + "_text", text);
+        editor.apply();
+
+        // Limit number of stored notifications to 50
+        int count = prefs.getInt("notification_count", 0);
+        if (count > 50) {
+            // Remove oldest notifications - simplified implementation
+            editor.putInt("notification_count", 1);
+            editor.apply();
+        } else {
+            editor.putInt("notification_count", count + 1);
+            editor.apply();
+        }
+    }
+
     private void processTip(final String orderId, final double tipAmount) {
-        if (orderId == null || db == null) return;
+        if (orderId == null) return;
 
         Log.d(TAG, "Processing tip: Order #" + orderId + ", Amount: $" + tipAmount);
 
-        // Find the delivery matching this order ID
-        db.collection("deliveries")
-                .whereEqualTo("orderId", orderId)
-                .limit(1)
-                .get()
+        // Find the delivery matching this order ID using repository
+        repository.findDeliveryByOrderId(orderId)
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     if (queryDocumentSnapshots.isEmpty()) {
                         // No matching delivery found, save as pending tip
-                        storePendingTip(orderId, tipAmount);
+                        repository.storePendingTip(orderId, tipAmount)
+                                .addOnSuccessListener(documentReference -> {
+                                    Log.d(TAG, "Stored pending tip for Order #" + orderId);
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e(TAG, "Error storing pending tip", e);
+                                });
                         return;
                     }
 
                     // Update existing delivery with the tip information
                     String documentId = queryDocumentSnapshots.getDocuments().get(0).getId();
-
-                    // Create nested updates for new structure
-                    Map<String, Object> updates = new HashMap<>();
-
-                    // Update amounts map
-                    Map<String, Object> amounts = new HashMap<>();
-                    amounts.put("tipAmount", tipAmount);
-                    updates.put("amounts", amounts);
-
-                    // Update status map
-                    Map<String, Object> status = new HashMap<>();
-                    status.put("isTipped", true);
-                    updates.put("status", status);
-
-                    // Update dates map
-                    Map<String, Object> dates = new HashMap<>();
-                    dates.put("tipped", Timestamp.now());
-                    updates.put("dates", dates);
-
-                    db.collection("deliveries")
-                            .document(documentId)
-                            .update(updates)
+                    repository.updateDeliveryWithTip(documentId, tipAmount)
                             .addOnSuccessListener(aVoid -> {
                                 Log.d(TAG, "Successfully updated delivery with tip");
-                                updateAddressTipStatistics(orderId, tipAmount);
                             })
                             .addOnFailureListener(e -> {
                                 Log.e(TAG, "Error updating delivery with tip", e);
@@ -204,87 +275,7 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Error finding delivery for tip", e);
-                    storePendingTip(orderId, tipAmount);
-                });
-    }
-
-    private void storePendingTip(String orderId, double tipAmount) {
-        // Store pending tip using new structure
-        Map<String, Object> pendingTip = new HashMap<>();
-        pendingTip.put("orderId", orderId);
-
-        Map<String, Object> amounts = new HashMap<>();
-        amounts.put("tipAmount", tipAmount);
-        pendingTip.put("amounts", amounts);
-
-        pendingTip.put("timestamp", Timestamp.now());
-        pendingTip.put("processed", false);
-
-        db.collection("pending_tips")
-                .add(pendingTip)
-                .addOnSuccessListener(documentReference -> {
-                    Log.d(TAG, "Pending tip stored with ID: " + documentReference.getId());
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error storing pending tip", e);
-                });
-    }
-
-    private void updateAddressTipStatistics(String orderId, double tipAmount) {
-        // Find the delivery to get the address
-        db.collection("deliveries")
-                .whereEqualTo("orderId", orderId)
-                .limit(1)
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    if (queryDocumentSnapshots.isEmpty()) return;
-
-                    String address = queryDocumentSnapshots.getDocuments().get(0).getString("address");
-                    if (address == null || address.isEmpty()) return;
-
-                    String normalizedAddress = address.toLowerCase().trim();
-
-                    // Find the address document
-                    db.collection("addresses")
-                            .whereEqualTo("normalizedAddress", normalizedAddress)
-                            .limit(1)
-                            .get()
-                            .addOnSuccessListener(addressSnapshots -> {
-                                if (addressSnapshots.isEmpty()) return;
-
-                                String addressId = addressSnapshots.getDocuments().get(0).getId();
-                                double currentTotalTips = addressSnapshots.getDocuments().get(0).getDouble("totalTips") != null ?
-                                        addressSnapshots.getDocuments().get(0).getDouble("totalTips") : 0.0;
-
-                                long deliveryCount = addressSnapshots.getDocuments().get(0).getLong("deliveryCount") != null ?
-                                        addressSnapshots.getDocuments().get(0).getLong("deliveryCount") : 0;
-
-                                if (deliveryCount == 0) deliveryCount = 1; // Avoid division by zero
-
-                                double newTotalTips = currentTotalTips + tipAmount;
-                                double newAverageTip = newTotalTips / deliveryCount;
-
-                                Map<String, Object> updates = new HashMap<>();
-                                updates.put("totalTips", newTotalTips);
-                                updates.put("averageTip", newAverageTip);
-                                updates.put("lastUpdated", Timestamp.now());
-
-                                db.collection("addresses")
-                                        .document(addressId)
-                                        .update(updates)
-                                        .addOnSuccessListener(aVoid -> {
-                                            Log.d(TAG, "Updated address tip statistics for: " + address);
-                                        })
-                                        .addOnFailureListener(e -> {
-                                            Log.e(TAG, "Error updating address tip statistics", e);
-                                        });
-                            })
-                            .addOnFailureListener(e -> {
-                                Log.e(TAG, "Error finding address for tip statistics update", e);
-                            });
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error finding delivery for address", e);
+                    repository.storePendingTip(orderId, tipAmount);
                 });
     }
 }

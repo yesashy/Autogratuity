@@ -1,5 +1,7 @@
 package com.autogratuity;
 
+import com.autogratuity.repositories.FirestoreRepository;
+import com.autogratuity.repositories.IFirestoreRepository;
 import android.os.Bundle;
 import android.app.Dialog;
 import android.app.job.JobInfo;
@@ -38,6 +40,7 @@ import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 
+
 import com.autogratuity.fragments.AddressesFragment;
 import com.autogratuity.fragments.BulkUploadFragment;
 import com.autogratuity.fragments.DashboardFragment;
@@ -59,11 +62,6 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_KML_KMZ_FILE = 123;
@@ -82,6 +80,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
+    private IFirestoreRepository repository; // Changed to interface
 
     // Subscription management
     private SubscriptionManager subscriptionManager;
@@ -96,6 +95,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // Initialize Firebase
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
+        repository = FirestoreRepository.getInstance(); // Using the interface
 
         // Check if user is logged in
         FirebaseUser currentUser = mAuth.getCurrentUser();
@@ -185,7 +185,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // Request battery optimization exemption for reliability
         requestBatteryOptimizationExemption();
     }
-
+    
     private void setupToolbar() {
         toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -226,7 +226,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             remainingMappingsText.setVisibility(View.VISIBLE);
         }
     }
-
+    
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         int itemId = item.getItemId();
@@ -268,55 +268,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         drawerLayout.closeDrawer(GravityCompat.START);
         return true;
     }
-
-    @Override
-    public void onBackPressed() {
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START);
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_KML_KMZ_FILE && resultCode == RESULT_OK) {
-            if (data != null && data.getData() != null) {
-                Uri fileUri = data.getData();
-
-                // Get persistent permission to access this file
-                try {
-                    getContentResolver().takePersistableUriPermission(
-                            fileUri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    );
-                } catch (SecurityException e) {
-                    Log.e(TAG, "Could not take persistable URI permission", e);
-                    // Continue anyway as we might not need persistent access
-                }
-
-                // Show confirmation dialog before importing
-                new AlertDialog.Builder(this)
-                        .setTitle("Import from Google Maps")
-                        .setMessage("Import delivery data from this KML/KMZ file? This will add locations to your Autogratuity database.")
-                        .setPositiveButton("Import", (dialog, which) -> {
-                            // Parse the KML/KMZ file
-                            KmlImportUtil importUtil = new KmlImportUtil(this);
-                            boolean success = importUtil.importFromKmlKmz(fileUri);
-
-                            if (success) {
-                                Toast.makeText(this, "Started importing data from Google Maps", Toast.LENGTH_SHORT).show();
-                                // Refresh UI after a delay to allow import to start
-                                new Handler().postDelayed(this::refreshData, 2000);
-                            }
-                        })
-                        .setNegativeButton("Cancel", null)
-                        .show();
-            }
-        }
-    }
-
+    
     private void launchShiptApp() {
         // Try multiple potential package names for Shipt
         String[] packageNames = {"com.shipt.shopper", "com.shipt.user", "com.shipt"};
@@ -430,10 +382,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         dialog.show();
     }
-
-    /**
-     * Show a dialog when user reaches the free tier limit
-     */
+    
     private void showFreeTierLimitReachedDialog() {
         new AlertDialog.Builder(this)
                 .setTitle("Free Tier Limit Reached")
@@ -450,7 +399,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setNegativeButton("Cancel", null)
                 .show();
     }
-
+    
     private void saveDelivery(String orderId, String address, double tipAmount) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) return;
@@ -465,135 +414,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             delivery.setTipDate(Timestamp.now());
         }
 
-        // Save to deliveries collection
-        db.collection("deliveries")
-                .add(delivery.toDocument())
+        // Save using repository through the interface
+        repository.addDelivery(delivery)
                 .addOnSuccessListener(documentReference -> {
                     Toast.makeText(MainActivity.this, "Delivery added successfully", Toast.LENGTH_SHORT).show();
-
-                    // Update address collection
-                    updateAddress(address, orderId, tipAmount);
 
                     // Record this mapping in usage tracker
                     usageTracker.recordMapping();
 
-                    // Refresh UI
-                    refreshData();
+                    // Navigate to Deliveries fragment to show the new entry
+                    Fragment deliveriesFragment = DeliveriesFragment.newInstance();
+                    getSupportFragmentManager().beginTransaction()
+                            .replace(R.id.fragment_container, deliveriesFragment)
+                            .commit();
+                    navigationView.setCheckedItem(R.id.nav_deliveries);
                 })
                 .addOnFailureListener(e -> {
                     Toast.makeText(MainActivity.this, "Error adding delivery: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
     }
-
-    private void updateAddress(String fullAddress, String orderId, double tipAmount) {
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) return;
-
-        String normalizedAddress = fullAddress.toLowerCase().trim();
-        String userId = currentUser.getUid();
-
-        // Check if address exists
-        db.collection("addresses")
-                .whereEqualTo("normalizedAddress", normalizedAddress)
-                .whereEqualTo("userId", userId)
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    if (!queryDocumentSnapshots.isEmpty()) {
-                        // Address exists, update it
-                        String addressId = queryDocumentSnapshots.getDocuments().get(0).getId();
-                        Map<String, Object> addressData = queryDocumentSnapshots.getDocuments().get(0).getData();
-
-                        // Update order IDs array
-                        List<String> orderIds;
-                        Object orderIdsObj = addressData.get("orderIds");
-                        if (orderIdsObj instanceof List) {
-                            @SuppressWarnings("unchecked")
-                            List<String> existingOrderIds = (List<String>) orderIdsObj;
-                            orderIds = new ArrayList<>(existingOrderIds);
-                            if (!orderIds.contains(orderId)) {
-                                orderIds.add(orderId);
-                            }
-                        } else {
-                            orderIds = new ArrayList<>();
-                            orderIds.add(orderId);
-                        }
-
-                        // Update delivery count
-                        long deliveryCount = 1;
-                        if (addressData.containsKey("deliveryCount")) {
-                            Object deliveryCountObj = addressData.get("deliveryCount");
-                            if (deliveryCountObj instanceof Long) {
-                                deliveryCount = (Long) deliveryCountObj + 1;
-                            } else if (deliveryCountObj instanceof Integer) {
-                                deliveryCount = ((Integer) deliveryCountObj) + 1;
-                            }
-                        }
-
-                        // Update tips if applicable
-                        double totalTips = 0;
-                        if (addressData.containsKey("totalTips")) {
-                            Object totalTipsObj = addressData.get("totalTips");
-                            if (totalTipsObj instanceof Double) {
-                                totalTips = (Double) totalTipsObj;
-                            } else if (totalTipsObj instanceof Long) {
-                                totalTips = ((Long) totalTipsObj).doubleValue();
-                            } else if (totalTipsObj instanceof Integer) {
-                                totalTips = ((Integer) totalTipsObj).doubleValue();
-                            }
-                        }
-
-                        if (tipAmount > 0) {
-                            totalTips += tipAmount;
-                        }
-
-                        double averageTip = totalTips / deliveryCount;
-
-                        // Update address document
-                        Map<String, Object> updateData = new HashMap<>();
-                        updateData.put("orderIds", orderIds);
-                        updateData.put("deliveryCount", deliveryCount);
-                        updateData.put("totalTips", totalTips);
-                        updateData.put("averageTip", averageTip);
-                        updateData.put("lastUpdated", Timestamp.now());
-
-                        db.collection("addresses").document(addressId)
-                                .update(updateData);
-                    } else {
-                        // Create new address
-                        List<String> orderIds = new ArrayList<>();
-                        orderIds.add(orderId);
-
-                        List<String> searchTerms = new ArrayList<>();
-                        searchTerms.add(normalizedAddress);
-
-                        // Add individual words for partial matching
-                        String[] words = normalizedAddress.split("\\s+");
-                        for (String word : words) {
-                            if (word.length() > 3) {  // Only add meaningful words
-                                searchTerms.add(word);
-                            }
-                        }
-
-                        Map<String, Object> addressData = new HashMap<>();
-                        addressData.put("fullAddress", fullAddress);
-                        addressData.put("normalizedAddress", normalizedAddress);
-                        addressData.put("orderIds", orderIds);
-                        addressData.put("totalTips", tipAmount);
-                        addressData.put("deliveryCount", 1);
-                        addressData.put("averageTip", tipAmount);
-                        addressData.put("userId", userId);
-                        addressData.put("doNotDeliver", false);
-                        addressData.put("searchTerms", searchTerms);
-                        addressData.put("lastUpdated", Timestamp.now());
-
-                        db.collection("addresses").add(addressData);
-                    }
-                });
-    }
-
-    /**
-     * Update UI that shows remaining mappings
-     */
+    
     private void updateRemainingMappingsUI(int remainingMappings, boolean isPro) {
         if (remainingMappingsText == null) return;
 
@@ -617,10 +457,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             remainingMappingsText.setTextColor(getResources().getColor(colorRes));
         }
     }
-
-    /**
-     * Initialize all services based on subscription status
-     */
+    
     private void initializeServices() {
         // Always start the notification listener service
         startNotificationListenerService();
@@ -633,10 +470,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             showProFeaturePromptIfNeeded();
         }
     }
-
-    /**
-     * Start the notification listener service (available to all users)
-     */
+    
     private void startNotificationListenerService() {
         // Request notification access if needed
         requestNotificationAccessIfNeeded();
@@ -649,10 +483,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             startService(persistenceIntent);
         }
     }
-
-    /**
-     * Request notification access if needed
-     */
+    
     private void requestNotificationAccessIfNeeded() {
         // Check if notification access is granted
         String enabledListeners = Settings.Secure.getString(
@@ -671,10 +502,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     .show();
         }
     }
-
-    /**
-     * Request battery optimization exemption
-     */
+    
     private void requestBatteryOptimizationExemption() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Intent intent = new Intent();
@@ -703,10 +531,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }
     }
-
-    /**
-     * Start Pro features (accessibility service)
-     */
+    
     private void startProFeatures() {
         // Request accessibility permission if needed
         requestShiptAccessibilityServiceIfNeeded();
@@ -719,11 +544,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             startService(captureIntent);
         }
     }
-
-    /**
-     * Check if the Shipt accessibility service is enabled
-     * and request if not
-     */
+    
     private void requestShiptAccessibilityServiceIfNeeded() {
         boolean isEnabled = isAccessibilityServiceEnabled(RobustShiptAccessibilityService.class);
 
@@ -739,10 +560,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     .show();
         }
     }
-
-    /**
-     * Check if a specific accessibility service is enabled
-     */
+    
     private boolean isAccessibilityServiceEnabled(Class<?> serviceClass) {
         String expectedServiceName = serviceClass.getName();
         String enabledServicesSetting = Settings.Secure.getString(
@@ -765,10 +583,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         return false;
     }
-
-    /**
-     * Show a prompt about Pro features on first launch
-     */
+    
     private void showProFeaturePromptIfNeeded() {
         SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         boolean hasShownPromo = prefs.getBoolean("has_shown_pro_promo", false);
@@ -801,10 +616,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             prefs.edit().putBoolean("has_shown_pro_promo", true).apply();
         }
     }
-
-    /**
-     * Show detailed information about Pro features
-     */
+    
     private void showProFeatureDetails() {
         new AlertDialog.Builder(this)
                 .setTitle("Pro Features")
@@ -821,10 +633,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setNegativeButton("Maybe Later", null)
                 .show();
     }
-
-    /**
-     * Show subscription options dialog
-     */
+    
     private void showSubscriptionOptions() {
         final String[] options = {
                 "Monthly: $3.99/month",
@@ -853,10 +662,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setNegativeButton("Cancel", null)
                 .show();
     }
-
-    /**
-     * Update UI elements based on subscription status
-     */
+    
     private void updateProFeaturesUI() {
         boolean isPro = subscriptionManager.isProUser();
 
@@ -876,17 +682,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             startProFeatures();
         }
     }
-
-    private void importFromGoogleMaps() {
-        // Create intent to select KML/KMZ file
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        String[] mimeTypes = {"application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", "application/xml", "text/xml"};
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-        startActivityForResult(intent, REQUEST_KML_KMZ_FILE);
-    }
-
+    
     private void scheduleDoNotDeliverJob() {
         JobScheduler jobScheduler = (JobScheduler) getSystemService(Context.JOB_SCHEDULER_SERVICE);
 
@@ -918,52 +714,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }
     }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main_menu, menu);
-
-        // Store reference to the Pro upgrade menu item
-        proUpgradeMenuItem = menu.findItem(R.id.action_upgrade_pro);
-
-        // Update visibility based on subscription status
-        updateProFeaturesUI();
-
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-
-        if (id == R.id.action_upgrade_pro) {
-            showSubscriptionOptions();
-            return true;
-        } else if (id == R.id.action_import_data) {
-            importFromGoogleMaps();
-            return true;
-        } else if (id == R.id.action_sign_out) {
-            signOut();
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        // Check if user is still logged in
-        if (mAuth.getCurrentUser() == null) {
-            startActivity(new Intent(this, LoginActivity.class));
-            finish();
-        }
-
-        // Update UI based on current subscription status
-        updateProFeaturesUI();
-    }
-
+    
     public void signOut() {
         mAuth.signOut();
         startActivity(new Intent(this, LoginActivity.class));

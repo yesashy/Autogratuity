@@ -4,49 +4,55 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
-
+import com.autogratuity.repositories.FirestoreRepository;
+import com.autogratuity.repositories.IFirestoreRepository;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
- * Tracks usage for freemium limitations
+ * Utility class for tracking app usage metrics
  */
 public class UsageTracker {
     private static final String TAG = "UsageTracker";
-
-    // Constants
+    private static final String PREFS_NAME = "autogratuity_usage";
+    private static final String KEY_MAPPING_COUNT = "mapping_count";
+    
+    // Free tier limits
     public static final int FREE_TIER_MAPPING_LIMIT = 100;
-    private static final String PREF_NAME = "autogratuity_usage";
-    private static final String PREF_KEY_MAPPING_COUNT = "mapping_count";
-
-    // Singleton instance
+    
     private static UsageTracker instance;
-
-    // Dependencies
+    
     private final Context context;
+    private final SharedPreferences prefs;
     private final FirebaseFirestore db;
     private final FirebaseAuth mAuth;
-    private final SubscriptionManager subscriptionManager;
-
-    // Cached values
-    private int cachedMappingCount = -1; // -1 indicates not loaded yet
+    private final IFirestoreRepository repository;
+    
+    private int mappingCount = 0;
+    private boolean isPro = false;
+    private SubscriptionManager subscriptionManager;
     private UsageUpdateListener listener;
-
+    
+    /**
+     * Private constructor for singleton pattern
+     */
     private UsageTracker(Context context) {
         this.context = context.getApplicationContext();
+        this.prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         this.db = FirebaseFirestore.getInstance();
         this.mAuth = FirebaseAuth.getInstance();
-        this.subscriptionManager = SubscriptionManager.getInstance(context);
+        this.repository = FirestoreRepository.getInstance();
+        
+        // Load local count from SharedPreferences
+        mappingCount = prefs.getInt(KEY_MAPPING_COUNT, 0);
+        
+        // Get subscription manager
+        subscriptionManager = SubscriptionManager.getInstance(context);
     }
-
+    
     /**
-     * Get singleton instance
+     * Get the singleton instance
      */
     public static synchronized UsageTracker getInstance(Context context) {
         if (instance == null) {
@@ -54,280 +60,206 @@ public class UsageTracker {
         }
         return instance;
     }
-
+    
     /**
      * Set a listener for usage updates
      */
     public void setListener(UsageUpdateListener listener) {
         this.listener = listener;
-
-        // If we already have cached values, notify the listener
-        if (cachedMappingCount >= 0) {
-            notifyListener();
-        }
+        
+        // Immediately notify with current data
+        notifyListener();
     }
-
+    
     /**
-     * Get the current mapping count
-     * This will load from Firestore if needed
+     * Load usage data from Firestore
      */
-    public void loadUsageData(final UsageDataCallback callback) {
-        // If we're a pro user, no need to count
-        if (subscriptionManager.isProUser()) {
-            cachedMappingCount = 0; // Pro users don't have a count
-            if (callback != null) {
-                callback.onDataLoaded(0, true);
-            }
-            notifyListener();
-            return;
-        }
-
-        // If we have cached values and not forcing refresh, use them
-        if (cachedMappingCount >= 0) {
-            if (callback != null) {
-                callback.onDataLoaded(cachedMappingCount, false);
-            }
-            return;
-        }
-
-        // Get current user
+    public void loadUsageData(UsageDataCallback callback) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) {
-            Log.e(TAG, "No user logged in");
             if (callback != null) {
-                callback.onError(new Exception("No user logged in"));
+                callback.onError(new Exception("User not logged in"));
             }
             return;
         }
-
-        // First try to load from Firestore
-        db.collection("user_usage")
-                .document(currentUser.getUid())
+        
+        String userId = currentUser.getUid();
+        
+        // First check if the user is a Pro user
+        isPro = subscriptionManager.isProUser();
+        
+        // Get the mapping count from Firestore
+        db.collection("users")
+                .document(userId)
                 .get()
                 .addOnSuccessListener(documentSnapshot -> {
                     if (documentSnapshot.exists() && documentSnapshot.contains("mappingCount")) {
-                        // Get count from Firestore
                         Long count = documentSnapshot.getLong("mappingCount");
                         if (count != null) {
-                            cachedMappingCount = count.intValue();
-
-                            // Store in local storage for offline access
-                            SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-                            prefs.edit().putInt(PREF_KEY_MAPPING_COUNT, cachedMappingCount).apply();
-
-                            // Notify caller
-                            if (callback != null) {
-                                callback.onDataLoaded(cachedMappingCount, false);
-                            }
-
+                            mappingCount = count.intValue();
+                            
+                            // Update local count
+                            prefs.edit().putInt(KEY_MAPPING_COUNT, mappingCount).apply();
+                            
                             // Notify listener
                             notifyListener();
-                            return;
+                            
+                            if (callback != null) {
+                                callback.onDataLoaded(mappingCount, isPro);
+                            }
+                        }
+                    } else {
+                        // Create the user document if it doesn't exist
+                        db.collection("users")
+                                .document(userId)
+                                .set(new UsageData(mappingCount, isPro));
+                        
+                        if (callback != null) {
+                            callback.onDataLoaded(mappingCount, isPro);
                         }
                     }
-
-                    // If no data in Firestore, try local storage
-                    SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-                    cachedMappingCount = prefs.getInt(PREF_KEY_MAPPING_COUNT, 0);
-
-                    // Create document in Firestore
-                    Map<String, Object> usage = new HashMap<>();
-                    usage.put("mappingCount", cachedMappingCount);
-                    usage.put("userId", currentUser.getUid());
-                    usage.put("email", currentUser.getEmail());
-                    usage.put("lastUpdated", System.currentTimeMillis());
-
-                    db.collection("user_usage")
-                            .document(currentUser.getUid())
-                            .set(usage)
-                            .addOnSuccessListener(aVoid -> {
-                                Log.d(TAG, "Created usage document in Firestore");
-                            })
-                            .addOnFailureListener(e -> {
-                                Log.e(TAG, "Error creating usage document", e);
-                            });
-
-                    // Notify caller
-                    if (callback != null) {
-                        callback.onDataLoaded(cachedMappingCount, false);
-                    }
-
-                    // Notify listener
-                    notifyListener();
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Error loading usage data", e);
-
-                    // Try local storage as backup
-                    SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-                    cachedMappingCount = prefs.getInt(PREF_KEY_MAPPING_COUNT, 0);
-
-                    // Notify caller
                     if (callback != null) {
-                        callback.onDataLoaded(cachedMappingCount, false);
+                        callback.onError(e);
                     }
-
-                    // Notify listener
-                    notifyListener();
                 });
     }
-
+    
     /**
-     * Check if user can add more mappings
-     */
-    public boolean canAddMapping() {
-        // Pro users can always add
-        if (subscriptionManager.isProUser()) {
-            return true;
-        }
-
-        // Load data if needed
-        if (cachedMappingCount < 0) {
-            // If data isn't loaded yet, be cautious and allow
-            // loadUsageData() will update later
-            return true;
-        }
-
-        // Check against limit
-        return cachedMappingCount < FREE_TIER_MAPPING_LIMIT;
-    }
-
-    /**
-     * Get remaining mappings for free tier
-     */
-    public int getRemainingMappings() {
-        if (subscriptionManager.isProUser()) {
-            return Integer.MAX_VALUE;
-        }
-
-        if (cachedMappingCount < 0) {
-            return FREE_TIER_MAPPING_LIMIT; // Default if not loaded yet
-        }
-
-        return Math.max(0, FREE_TIER_MAPPING_LIMIT - cachedMappingCount);
-    }
-
-    /**
-     * Record a new mapping
+     * Record a mapping action
      */
     public void recordMapping() {
-        // Pro users don't count mappings
-        if (subscriptionManager.isProUser()) {
-            return;
-        }
-
-        // Get current user
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            Log.e(TAG, "No user logged in");
-            return;
-        }
-
-        // Increment local cache
-        if (cachedMappingCount < 0) {
-            cachedMappingCount = 1;
-        } else {
-            cachedMappingCount++;
-        }
-
-        // Update local storage
-        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putInt(PREF_KEY_MAPPING_COUNT, cachedMappingCount).apply();
-
+        // Increment the local count
+        mappingCount++;
+        
+        // Update SharedPreferences
+        prefs.edit().putInt(KEY_MAPPING_COUNT, mappingCount).apply();
+        
         // Update Firestore
-        DocumentReference userUsageRef = db.collection("user_usage")
-                .document(currentUser.getUid());
-
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("mappingCount", cachedMappingCount);
-        updates.put("lastUpdated", System.currentTimeMillis());
-
-        userUsageRef.set(updates)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "Recorded mapping: " + cachedMappingCount);
-                })
-                .addOnFailureListener(e -> {
-                    // If document doesn't exist yet, create it
-                    if (e.getMessage() != null && e.getMessage().contains("No document to update")) {
-                        Map<String, Object> usage = new HashMap<>();
-                        usage.put("mappingCount", cachedMappingCount);
-                        usage.put("userId", currentUser.getUid());
-                        usage.put("email", currentUser.getEmail());
-                        usage.put("lastUpdated", System.currentTimeMillis());
-
-                        userUsageRef.set(usage);
-                    } else {
-                        Log.e(TAG, "Error recording mapping", e);
-                    }
-                });
-
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser != null) {
+            String userId = currentUser.getUid();
+            db.collection("users")
+                    .document(userId)
+                    .update("mappingCount", mappingCount)
+                    .addOnFailureListener(e -> Log.e(TAG, "Error updating mapping count", e));
+        }
+        
         // Notify listener
         notifyListener();
     }
-
+    
     /**
-     * Notify the listener if set
+     * Reset mapping count to 0
+     */
+    public void resetMappingCount() {
+        mappingCount = 0;
+        
+        // Update SharedPreferences
+        prefs.edit().putInt(KEY_MAPPING_COUNT, mappingCount).apply();
+        
+        // Update Firestore
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser != null) {
+            String userId = currentUser.getUid();
+            db.collection("users")
+                    .document(userId)
+                    .update("mappingCount", mappingCount)
+                    .addOnFailureListener(e -> Log.e(TAG, "Error resetting mapping count", e));
+        }
+        
+        // Notify listener
+        notifyListener();
+    }
+    
+    /**
+     * Check if the user can add a new mapping (within free tier limits or Pro)
+     */
+    public boolean canAddMapping() {
+        // Pro users can always add mappings
+        if (isPro) {
+            return true;
+        }
+        
+        // Free users are limited
+        return mappingCount < FREE_TIER_MAPPING_LIMIT;
+    }
+    
+    /**
+     * Get the remaining mappings for free tier users
+     */
+    public int getRemainingMappings() {
+        if (isPro) {
+            return Integer.MAX_VALUE;
+        }
+        
+        return Math.max(0, FREE_TIER_MAPPING_LIMIT - mappingCount);
+    }
+    
+    /**
+     * Update the Pro status of the user
+     */
+    public void setProStatus(boolean isPro) {
+        this.isPro = isPro;
+        
+        // Update Firestore
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser != null) {
+            String userId = currentUser.getUid();
+            db.collection("users")
+                    .document(userId)
+                    .update("isPro", isPro)
+                    .addOnFailureListener(e -> Log.e(TAG, "Error updating Pro status", e));
+        }
+        
+        // Notify listener
+        notifyListener();
+    }
+    
+    /**
+     * Notify the listener about updated usage data
      */
     private void notifyListener() {
         if (listener != null) {
-            boolean isPro = subscriptionManager.isProUser();
-            int remaining = getRemainingMappings();
-            listener.onUsageUpdated(cachedMappingCount, remaining, isPro);
+            listener.onUsageUpdated(mappingCount, getRemainingMappings(), isPro);
         }
     }
-
+    
     /**
-     * Reset mapping count (for new accounts)
+     * Data class for storing usage information
      */
-    public void resetMappingCount() {
-        // Get current user
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            Log.e(TAG, "No user logged in");
-            return;
+    private static class UsageData {
+        private final int mappingCount;
+        private final boolean isPro;
+        
+        public UsageData(int mappingCount, boolean isPro) {
+            this.mappingCount = mappingCount;
+            this.isPro = isPro;
         }
-
-        // Reset local cache
-        cachedMappingCount = 0;
-
-        // Update local storage
-        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putInt(PREF_KEY_MAPPING_COUNT, 0).apply();
-
-        // Update Firestore
-        Map<String, Object> usage = new HashMap<>();
-        usage.put("mappingCount", 0);
-        usage.put("userId", currentUser.getUid());
-        usage.put("email", currentUser.getEmail());
-        usage.put("lastUpdated", System.currentTimeMillis());
-        usage.put("reset", true);
-
-        db.collection("user_usage")
-                .document(currentUser.getUid())
-                .set(usage)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "Reset mapping count");
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error resetting mapping count", e);
-                });
-
-        // Notify listener
-        notifyListener();
+        
+        public int getMappingCount() {
+            return mappingCount;
+        }
+        
+        public boolean isPro() {
+            return isPro;
+        }
     }
-
+    
     /**
-     * Listener for usage updates
-     */
-    public interface UsageUpdateListener {
-        void onUsageUpdated(int mappingCount, int remainingMappings, boolean isPro);
-    }
-
-    /**
-     * Callback for loading usage data
+     * Callback interface for loading usage data
      */
     public interface UsageDataCallback {
         void onDataLoaded(int mappingCount, boolean isPro);
         void onError(Exception e);
+    }
+    
+    /**
+     * Listener interface for usage updates
+     */
+    public interface UsageUpdateListener {
+        void onUsageUpdated(int mappingCount, int remainingMappings, boolean isPro);
     }
 }

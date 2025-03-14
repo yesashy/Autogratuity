@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- app/src/main/res/layout/item_delivery.xml -->
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
-    app:cardBackgroundColor="@color/gray_800"
+    android:layout_margin="8dp"
     app:cardCornerRadius="8dp"
-    app:cardElevation="0dp">
+    app:cardElevation="4dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -15,86 +14,48 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/order_id_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/text_order_id"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="#123456789"
-                android:textColor="@color/purple_400"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <TextView
-                android:id="@+id/text_tip"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="$7.50"
-                android:textColor="@color/green_700"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <ImageButton
-                android:id="@+id/button_edit"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_marginStart="8dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_edit"
-                app:tint="@color/gray_400" />
-        </LinearLayout>
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Order #123456789" />
 
         <TextView
-            android:id="@+id/text_address"
+            android:id="@+id/address_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="123 Main St, Anytown, USA"
-            android:textColor="@color/white" />
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textSize="14sp"
+            tools:text="123 Main St, Anytown, USA 12345" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="4dp">
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/text_date"
-                android:layout_width="wrap_content"
+                android:id="@+id/date_text"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Mar 15, 2025"
-                android:textColor="@color/gray_400"
-                android:textSize="12sp" />
+                android:layout_weight="1"
+                android:textSize="14sp"
+                tools:text="01/01/2023" />
 
             <TextView
-                android:id="@+id/text_completion_date"
+                android:id="@+id/tip_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="Completed: Mar 15, 2025"
-                android:textColor="@color/gray_400"
-                android:textSize="12sp"
-                android:visibility="visible" />
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="$10.00" />
+
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/text_do_not_deliver"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="DO NOT DELIVER"
-            android:textColor="@color/red_500"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
     </LinearLayout>
+
 </androidx.cardview.widget.CardView>

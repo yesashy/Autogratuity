@@ -1,21 +1,24 @@
 package com.autogratuity.repositories;
 
-import java.util.List;
-
 /**
  * Generic callback interface for repository operations
- * @param <T> Type of data being returned
+ * Provides unified error handling for asynchronous operations
+ *
+ * @param <T> The type of result expected from the operation
  */
 public interface RepositoryCallback<T> {
+    
     /**
-     * Called when operation completes successfully
-     * @param result Result of the operation
+     * Called when the operation completes successfully
+     *
+     * @param result The result of the operation
      */
     void onSuccess(T result);
-
+    
     /**
-     * Called when operation fails
-     * @param exception Exception that occurred
+     * Called when the operation fails
+     *
+     * @param e The exception that caused the failure
      */
-    void onError(Exception exception);
+    void onError(Exception e);
 }
