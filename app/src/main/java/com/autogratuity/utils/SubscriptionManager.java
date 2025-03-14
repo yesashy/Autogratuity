@@ -25,6 +25,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -433,7 +434,7 @@ public class SubscriptionManager implements PurchasesUpdatedListener {
         if (productId.equals(PRODUCT_ID_PRO_LIFETIME)) {
             // One-time purchase
             paramsBuilder.setProductDetailsParamsList(
-                    List.of(
+                    Collections.singletonList(
                             BillingFlowParams.ProductDetailsParams.newBuilder()
                                     .setProductDetails(productDetails)
                                     .build()
@@ -445,7 +446,7 @@ public class SubscriptionManager implements PurchasesUpdatedListener {
                     !productDetails.getSubscriptionOfferDetails().isEmpty()) {
 
                 paramsBuilder.setProductDetailsParamsList(
-                        List.of(
+                        Collections.singletonList(
                                 BillingFlowParams.ProductDetailsParams.newBuilder()
                                         .setProductDetails(productDetails)
                                         .setOfferToken(productDetails.getSubscriptionOfferDetails().get(0).getOfferToken())

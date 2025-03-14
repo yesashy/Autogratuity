@@ -19,6 +19,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Autogratuity">
 
+        <activity
+            android:name=".TestFirebaseActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!-- Login Activity -->
         <activity
             android:name=".LoginActivity"

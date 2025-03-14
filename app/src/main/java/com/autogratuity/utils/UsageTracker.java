@@ -8,8 +8,7 @@ import androidx.annotation.NonNull;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.HashMap;
@@ -240,10 +239,10 @@ public class UsageTracker {
                 .document(currentUser.getUid());
 
         Map<String, Object> updates = new HashMap<>();
-        updates.put("mappingCount", FieldValue.increment(1));
+        updates.put("mappingCount", cachedMappingCount);
         updates.put("lastUpdated", System.currentTimeMillis());
 
-        userUsageRef.update(updates)
+        userUsageRef.set(updates)
                 .addOnSuccessListener(aVoid -> {
                     Log.d(TAG, "Recorded mapping: " + cachedMappingCount);
                 })
