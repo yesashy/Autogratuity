@@ -1,4 +1,3 @@
-// app/src/main/java/com/autogratuity/adapters/DeliveriesAdapter.java
 package com.autogratuity.adapters;
 
 import android.content.Context;

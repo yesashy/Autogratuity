@@ -1,4 +1,5 @@
 package com.autogratuity;
+
 import android.os.Bundle;
 import android.app.Dialog;
 import android.app.job.JobInfo;
@@ -42,6 +43,7 @@ import com.autogratuity.fragments.BulkUploadFragment;
 import com.autogratuity.fragments.DashboardFragment;
 import com.autogratuity.fragments.DeliveriesFragment;
 import com.autogratuity.fragments.MapFragment;
+import com.autogratuity.models.Delivery;
 import com.autogratuity.services.DoNotDeliverService;
 import com.autogratuity.services.NotificationPersistenceService;
 import com.autogratuity.services.RobustShiptAccessibilityService;
@@ -57,6 +59,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -452,24 +455,19 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) return;
 
-        // Create delivery object
-        Timestamp now = Timestamp.now();
-        Map<String, Object> delivery = new HashMap<>();
-        delivery.put("orderId", orderId);
-        delivery.put("address", address);
-        delivery.put("deliveryDate", now);
-        delivery.put("importDate", now);  // Added for the 14-day rule
-        delivery.put("userId", currentUser.getUid());
-        delivery.put("doNotDeliver", false);  // Initialize as false
+        // Create delivery using new Delivery model
+        Delivery delivery = new Delivery(orderId, address, Timestamp.now());
+        delivery.setUserId(currentUser.getUid());
+        delivery.setImportDate(Timestamp.now());
 
         if (tipAmount > 0) {
-            delivery.put("tipAmount", tipAmount);
-            delivery.put("tipDate", now);
+            delivery.setTipAmount(tipAmount);
+            delivery.setTipDate(Timestamp.now());
         }
 
         // Save to deliveries collection
         db.collection("deliveries")
-                .add(delivery)
+                .add(delivery.toDocument())
                 .addOnSuccessListener(documentReference -> {
                     Toast.makeText(MainActivity.this, "Delivery added successfully", Toast.LENGTH_SHORT).show();
 
@@ -506,17 +504,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         Map<String, Object> addressData = queryDocumentSnapshots.getDocuments().get(0).getData();
 
                         // Update order IDs array
-                        Object orderIds = addressData.get("orderIds");
-                        if (orderIds instanceof List) {
+                        List<String> orderIds;
+                        Object orderIdsObj = addressData.get("orderIds");
+                        if (orderIdsObj instanceof List) {
                             @SuppressWarnings("unchecked")
-                            List<String> orderIdsList = (List<String>) orderIds;
-                            if (!orderIdsList.contains(orderId)) {
-                                orderIdsList.add(orderId);
+                            List<String> existingOrderIds = (List<String>) orderIdsObj;
+                            orderIds = new ArrayList<>(existingOrderIds);
+                            if (!orderIds.contains(orderId)) {
+                                orderIds.add(orderId);
                             }
                         } else {
-                            List<String> newOrderIds = new java.util.ArrayList<>();
-                            newOrderIds.add(orderId);
-                            orderIds = newOrderIds;
+                            orderIds = new ArrayList<>();
+                            orderIds.add(orderId);
                         }
 
                         // Update delivery count
@@ -555,13 +554,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         updateData.put("deliveryCount", deliveryCount);
                         updateData.put("totalTips", totalTips);
                         updateData.put("averageTip", averageTip);
+                        updateData.put("lastUpdated", Timestamp.now());
 
                         db.collection("addresses").document(addressId)
                                 .update(updateData);
                     } else {
                         // Create new address
-                        List<String> orderIds = new java.util.ArrayList<>();
+                        List<String> orderIds = new ArrayList<>();
                         orderIds.add(orderId);
+
+                        List<String> searchTerms = new ArrayList<>();
+                        searchTerms.add(normalizedAddress);
+
+                        // Add individual words for partial matching
+                        String[] words = normalizedAddress.split("\\s+");
+                        for (String word : words) {
+                            if (word.length() > 3) {  // Only add meaningful words
+                                searchTerms.add(word);
+                            }
+                        }
 
                         Map<String, Object> addressData = new HashMap<>();
                         addressData.put("fullAddress", fullAddress);
@@ -571,7 +582,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         addressData.put("deliveryCount", 1);
                         addressData.put("averageTip", tipAmount);
                         addressData.put("userId", userId);
-                        addressData.put("doNotDeliver", false);  // Initialize as false
+                        addressData.put("doNotDeliver", false);
+                        addressData.put("searchTerms", searchTerms);
+                        addressData.put("lastUpdated", Timestamp.now());
 
                         db.collection("addresses").add(addressData);
                     }
@@ -585,10 +598,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (remainingMappingsText == null) return;
 
         if (isPro) {
-            remainingMappingsText.setText("Pro User");
+            remainingMappingsText.setText(R.string.pro_user);
             remainingMappingsText.setTextColor(getResources().getColor(R.color.green_700));
         } else {
-            remainingMappingsText.setText(remainingMappings + " deliveries remaining");
+            String message = String.format(getString(R.string.remaining_mappings), remainingMappings);
+            remainingMappingsText.setText(message);
 
             // Change text color based on how many are left
             int colorRes;

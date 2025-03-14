@@ -8,6 +8,7 @@ import android.os.Bundle;
 
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -157,11 +158,67 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
 
         Log.d(TAG, "Processing tip: Order #" + orderId + ", Amount: $" + tipAmount);
 
-        // Store this tip in the pending tips collection
+        // Find the delivery matching this order ID
+        db.collection("deliveries")
+                .whereEqualTo("orderId", orderId)
+                .limit(1)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    if (queryDocumentSnapshots.isEmpty()) {
+                        // No matching delivery found, save as pending tip
+                        storePendingTip(orderId, tipAmount);
+                        return;
+                    }
+
+                    // Update existing delivery with the tip information
+                    String documentId = queryDocumentSnapshots.getDocuments().get(0).getId();
+
+                    // Create nested updates for new structure
+                    Map<String, Object> updates = new HashMap<>();
+
+                    // Update amounts map
+                    Map<String, Object> amounts = new HashMap<>();
+                    amounts.put("tipAmount", tipAmount);
+                    updates.put("amounts", amounts);
+
+                    // Update status map
+                    Map<String, Object> status = new HashMap<>();
+                    status.put("isTipped", true);
+                    updates.put("status", status);
+
+                    // Update dates map
+                    Map<String, Object> dates = new HashMap<>();
+                    dates.put("tipped", Timestamp.now());
+                    updates.put("dates", dates);
+
+                    db.collection("deliveries")
+                            .document(documentId)
+                            .update(updates)
+                            .addOnSuccessListener(aVoid -> {
+                                Log.d(TAG, "Successfully updated delivery with tip");
+                                updateAddressTipStatistics(orderId, tipAmount);
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error updating delivery with tip", e);
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error finding delivery for tip", e);
+                    storePendingTip(orderId, tipAmount);
+                });
+    }
+
+    private void storePendingTip(String orderId, double tipAmount) {
+        // Store pending tip using new structure
         Map<String, Object> pendingTip = new HashMap<>();
-        pendingTip.put("order_id", orderId);
-        pendingTip.put("tip_amount", tipAmount);
+        pendingTip.put("orderId", orderId);
+
+        Map<String, Object> amounts = new HashMap<>();
+        amounts.put("tipAmount", tipAmount);
+        pendingTip.put("amounts", amounts);
+
         pendingTip.put("timestamp", Timestamp.now());
+        pendingTip.put("processed", false);
 
         db.collection("pending_tips")
                 .add(pendingTip)
@@ -170,6 +227,64 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Error storing pending tip", e);
+                });
+    }
+
+    private void updateAddressTipStatistics(String orderId, double tipAmount) {
+        // Find the delivery to get the address
+        db.collection("deliveries")
+                .whereEqualTo("orderId", orderId)
+                .limit(1)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    if (queryDocumentSnapshots.isEmpty()) return;
+
+                    String address = queryDocumentSnapshots.getDocuments().get(0).getString("address");
+                    if (address == null || address.isEmpty()) return;
+
+                    String normalizedAddress = address.toLowerCase().trim();
+
+                    // Find the address document
+                    db.collection("addresses")
+                            .whereEqualTo("normalizedAddress", normalizedAddress)
+                            .limit(1)
+                            .get()
+                            .addOnSuccessListener(addressSnapshots -> {
+                                if (addressSnapshots.isEmpty()) return;
+
+                                String addressId = addressSnapshots.getDocuments().get(0).getId();
+                                double currentTotalTips = addressSnapshots.getDocuments().get(0).getDouble("totalTips") != null ?
+                                        addressSnapshots.getDocuments().get(0).getDouble("totalTips") : 0.0;
+
+                                long deliveryCount = addressSnapshots.getDocuments().get(0).getLong("deliveryCount") != null ?
+                                        addressSnapshots.getDocuments().get(0).getLong("deliveryCount") : 0;
+
+                                if (deliveryCount == 0) deliveryCount = 1; // Avoid division by zero
+
+                                double newTotalTips = currentTotalTips + tipAmount;
+                                double newAverageTip = newTotalTips / deliveryCount;
+
+                                Map<String, Object> updates = new HashMap<>();
+                                updates.put("totalTips", newTotalTips);
+                                updates.put("averageTip", newAverageTip);
+                                updates.put("lastUpdated", Timestamp.now());
+
+                                db.collection("addresses")
+                                        .document(addressId)
+                                        .update(updates)
+                                        .addOnSuccessListener(aVoid -> {
+                                            Log.d(TAG, "Updated address tip statistics for: " + address);
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            Log.e(TAG, "Error updating address tip statistics", e);
+                                        });
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error finding address for tip statistics update", e);
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error finding delivery for address", e);
                 });
     }
 }

@@ -4,6 +4,7 @@ import android.app.job.JobParameters;
 import android.app.job.JobService;
 import android.util.Log;
 
+import com.autogratuity.models.Delivery;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -73,11 +74,11 @@ public class DoNotDeliverService extends JobService {
         Date thresholdDate = calendar.getTime();
         Timestamp thresholdTimestamp = new Timestamp(thresholdDate);
 
-        // Query for orders older than threshold with no tip
+        // Query for orders older than threshold with no tip - using nested fields
         db.collection("deliveries")
                 .whereEqualTo("userId", userId)
-                .whereLessThan("importDate", thresholdTimestamp)
-                .whereEqualTo("doNotDeliver", false)
+                .whereLessThan("dates.accepted", thresholdTimestamp)
+                .whereEqualTo("status.doNotDeliver", false)
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     if (queryDocumentSnapshots.isEmpty()) {
@@ -90,7 +91,8 @@ public class DoNotDeliverService extends JobService {
 
                     for (DocumentSnapshot document : queryDocumentSnapshots) {
                         // Check if this order has a tip
-                        if (document.contains("tipAmount")) {
+                        Delivery delivery = Delivery.fromDocument(document);
+                        if (delivery.isTipped()) {
                             // This order has a tip, so don't mark it
                             pendingUpdates.decrementAndGet();
                             continue;
@@ -98,14 +100,16 @@ public class DoNotDeliverService extends JobService {
 
                         // This order has no tip after 14 days, mark it as "Do Not Deliver"
                         Map<String, Object> updates = new HashMap<>();
-                        updates.put("doNotDeliver", true);
+                        Map<String, Object> status = new HashMap<>();
+                        status.put("doNotDeliver", true);
+                        updates.put("status", status);
 
                         // Update the order
                         db.collection("deliveries")
                                 .document(document.getId())
                                 .update(updates)
                                 .addOnSuccessListener(aVoid -> {
-                                    Log.d(TAG, "Order " + document.getString("orderId") + " marked as Do Not Deliver");
+                                    Log.d(TAG, "Order " + delivery.getOrderId() + " marked as Do Not Deliver");
 
                                     // Also update the associated address
                                     updateAddressForOrder(document, userId);
@@ -131,17 +135,18 @@ public class DoNotDeliverService extends JobService {
 
     private void updateAddressForOrder(DocumentSnapshot orderDocument, String userId) {
         // Get the address from the order
-        String address = orderDocument.getString("address");
+        Delivery delivery = Delivery.fromDocument(orderDocument);
+        String address = delivery.getAddress();
         if (address == null) return;
 
         // Check if there's a coordinates key to use
-        String coordinates = orderDocument.getString("coordinates");
+        String coordinates = delivery.getCoordinates();
         String addressKey = coordinates != null ? coordinates.trim() : address.toLowerCase().trim();
 
         // Query for the address
         db.collection("addresses")
                 .whereEqualTo("userId", userId)
-                .whereEqualTo("coordinatesKey", addressKey)
+                .whereEqualTo("normalizedAddress", address.toLowerCase().trim())
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     if (queryDocumentSnapshots.isEmpty()) return;
@@ -151,6 +156,7 @@ public class DoNotDeliverService extends JobService {
 
                     Map<String, Object> updates = new HashMap<>();
                     updates.put("doNotDeliver", true);
+                    updates.put("lastUpdated", Timestamp.now());
 
                     db.collection("addresses")
                             .document(addressDocument.getId())

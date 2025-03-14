@@ -11,6 +11,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.autogratuity.R;
+import com.autogratuity.models.Delivery;
 import com.autogratuity.views.StatCard;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -109,11 +110,11 @@ public class DashboardFragment extends Fragment {
         // Format for currency
         DecimalFormat currencyFormat = new DecimalFormat("$0.00");
 
-        // Query for today's data
+        // Query for today's data - using nested fields
         db.collection("deliveries")
                 .whereEqualTo("userId", userId)
-                .whereGreaterThanOrEqualTo("deliveryDate", com.google.firebase.Timestamp.now().toDate())
-                .orderBy("deliveryDate", Query.Direction.DESCENDING)
+                .whereGreaterThanOrEqualTo("dates.accepted", com.google.firebase.Timestamp.now())
+                .orderBy("dates.accepted", Query.Direction.DESCENDING)
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     if (!isAdded()) return;
@@ -124,9 +125,9 @@ public class DashboardFragment extends Fragment {
                     int pendingTips = 0;
 
                     for (QueryDocumentSnapshot document : queryDocumentSnapshots) {
-                        if (document.contains("tipAmount")) {
-                            double tipAmount = document.getDouble("tipAmount");
-                            totalTips += tipAmount;
+                        Delivery delivery = Delivery.fromDocument(document);
+                        if (delivery.isTipped()) {
+                            totalTips += delivery.getTipAmount();
                             tippedDeliveries++;
                         } else {
                             pendingTips++;
@@ -142,11 +143,11 @@ public class DashboardFragment extends Fragment {
                     todayDeliveries.setStatValue(String.valueOf(totalDeliveries));
                 });
 
-        // Query for 7-day data
+        // Query for 7-day data - using nested fields
         db.collection("deliveries")
                 .whereEqualTo("userId", userId)
-                .whereGreaterThanOrEqualTo("deliveryDate", weekStart)
-                .orderBy("deliveryDate", Query.Direction.DESCENDING)
+                .whereGreaterThanOrEqualTo("dates.accepted", com.google.firebase.Timestamp.now())
+                .orderBy("dates.accepted", Query.Direction.DESCENDING)
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     if (!isAdded()) return;
@@ -157,9 +158,9 @@ public class DashboardFragment extends Fragment {
                     int pendingTips = 0;
 
                     for (QueryDocumentSnapshot document : queryDocumentSnapshots) {
-                        if (document.contains("tipAmount")) {
-                            double tipAmount = document.getDouble("tipAmount");
-                            totalTips += tipAmount;
+                        Delivery delivery = Delivery.fromDocument(document);
+                        if (delivery.isTipped()) {
+                            totalTips += delivery.getTipAmount();
                             tippedDeliveries++;
                         } else {
                             pendingTips++;
@@ -175,11 +176,11 @@ public class DashboardFragment extends Fragment {
                     weekDeliveries.setStatValue(String.valueOf(totalDeliveries));
                 });
 
-        // Query for 30-day data
+        // Query for 30-day data - using nested fields
         db.collection("deliveries")
                 .whereEqualTo("userId", userId)
-                .whereGreaterThanOrEqualTo("deliveryDate", monthStart)
-                .orderBy("deliveryDate", Query.Direction.DESCENDING)
+                .whereGreaterThanOrEqualTo("dates.accepted", com.google.firebase.Timestamp.now())
+                .orderBy("dates.accepted", Query.Direction.DESCENDING)
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     if (!isAdded()) return;
@@ -190,9 +191,9 @@ public class DashboardFragment extends Fragment {
                     int pendingTips = 0;
 
                     for (QueryDocumentSnapshot document : queryDocumentSnapshots) {
-                        if (document.contains("tipAmount")) {
-                            double tipAmount = document.getDouble("tipAmount");
-                            totalTips += tipAmount;
+                        Delivery delivery = Delivery.fromDocument(document);
+                        if (delivery.isTipped()) {
+                            totalTips += delivery.getTipAmount();
                             tippedDeliveries++;
                         } else {
                             pendingTips++;
