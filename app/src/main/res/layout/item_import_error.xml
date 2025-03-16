@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="8dp"
     android:layout_marginBottom="8dp"
-    app:cardBackgroundColor="@color/red_800"
+    app:cardBackgroundColor="@color/red_900"
     app:cardCornerRadius="8dp"
     app:cardElevation="2dp">
 
@@ -29,8 +28,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textColor="@color/white"
-            tools:text="Failed to import data: Invalid file format" />
+            android:text="Error details will appear here..."
+            android:textColor="@color/gray_300" />
 
     </LinearLayout>
 

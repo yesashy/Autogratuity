@@ -5,7 +5,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.9.0'  // Latest stable version
+        classpath 'com.android.tools.build:gradle:8.9.0'  // Restored original version
         classpath 'com.google.gms:google-services:4.4.0'  // Latest version
     }
 }

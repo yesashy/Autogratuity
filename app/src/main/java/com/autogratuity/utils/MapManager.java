@@ -14,6 +14,7 @@ import androidx.core.graphics.drawable.DrawableCompat;
 import com.autogratuity.models.Address;
 import com.autogratuity.models.Coordinates;
 import com.autogratuity.models.DeliveryData;
+import com.autogratuity.models.TipData;
 import com.autogratuity.repositories.IFirestoreRepository;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -287,7 +288,13 @@ public class MapManager {
                             double latitude = 0;
                             double longitude = 0;
                             
-                            if (geoPointObj instanceof GeoPoint) {
+                            if (geoPointObj instanceof Map) {
+                                Map<String, Object> geoPointMap = (Map<String, Object>) geoPointObj;
+                                if (geoPointMap.containsKey("latitude") && geoPointMap.containsKey("longitude")) {
+                                    latitude = ((Number) geoPointMap.get("latitude")).doubleValue();
+                                    longitude = ((Number) geoPointMap.get("longitude")).doubleValue();
+                                }
+                            } else if (geoPointObj instanceof GeoPoint) {
                                 GeoPoint geoPoint = (GeoPoint) geoPointObj;
                                 latitude = geoPoint.getLatitude();
                                 longitude = geoPoint.getLongitude();

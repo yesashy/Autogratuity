@@ -1,23 +1,28 @@
 package com.autogratuity.adapters;
 
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.autogratuity.R;
-import com.autogratuity.models.Delivery;
+import com.autogratuity.data.model.Delivery;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Adapter for displaying deliveries in a RecyclerView
+ * Adapter for displaying deliveries in a RecyclerView.
+ * Updated to work with the new repository pattern and Delivery model.
  */
 public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.DeliveryViewHolder> {
     
@@ -38,7 +43,7 @@ public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.De
     public DeliveriesAdapter(List<Delivery> deliveries, OnDeliveryClickListener listener) {
         this.deliveries = deliveries;
         this.listener = listener;
-        this.dateFormat = new SimpleDateFormat("MM/dd/yyyy", Locale.US);
+        this.dateFormat = new SimpleDateFormat("MMM d, yyyy", Locale.getDefault());
     }
     
     @NonNull
@@ -72,7 +77,7 @@ public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.De
     /**
      * ViewHolder for delivery items
      */
-    class DeliveryViewHolder extends RecyclerView.ViewHolder {
+    static class DeliveryViewHolder extends RecyclerView.ViewHolder {
         private final TextView orderIdText;
         private final TextView addressText;
         private final TextView dateText;
@@ -88,25 +93,54 @@ public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.De
         
         void bind(final Delivery delivery, final OnDeliveryClickListener listener) {
             // Set order ID
-            orderIdText.setText(String.format("Order #%s", delivery.getOrderId()));
+            String orderId = delivery.getOrderId();
+            if (orderId != null && !orderId.isEmpty()) {
+                orderIdText.setText(String.format("Order #%s", orderId));
+            } else {
+                orderIdText.setText("Delivery");
+            }
             
             // Set address
-            addressText.setText(delivery.getAddress());
-            
-            // Set delivery date
-            if (delivery.getDeliveryDate() != null) {
-                dateText.setText(dateFormat.format(delivery.getDeliveryDate().toDate()));
+            if (delivery.getAddress() != null) {
+                addressText.setText(delivery.getAddress().getFormattedAddress());
             } else {
-                dateText.setText("N/A");
+                addressText.setText("Unknown Address");
+            }
+            
+            // Set delivery date based on which timestamp is available
+            Date deliveryDate = null;
+            if (delivery.getTimes() != null) {
+                if (delivery.getTimes().getCompletedAt() != null) {
+                    deliveryDate = delivery.getTimes().getCompletedAt();
+                } else if (delivery.getTimes().getPickedUpAt() != null) {
+                    deliveryDate = delivery.getTimes().getPickedUpAt();
+                } else if (delivery.getTimes().getAcceptedAt() != null) {
+                    deliveryDate = delivery.getTimes().getAcceptedAt();
+                } else if (delivery.getTimes().getOrderedAt() != null) {
+                    deliveryDate = delivery.getTimes().getOrderedAt();
+                }
+            }
+            
+            if (deliveryDate != null) {
+                dateText.setText(dateFormat.format(deliveryDate));
+            } else if (delivery.getMetadata() != null && delivery.getMetadata().getCreatedAt() != null) {
+                dateText.setText(dateFormat.format(delivery.getMetadata().getCreatedAt()));
+            } else {
+                dateText.setText("Unknown Date");
             }
             
             // Set tip amount
-            if (delivery.getTipAmount() > 0) {
-                tipText.setText(String.format(Locale.US, "$%.2f", delivery.getTipAmount()));
-                tipText.setTextColor(itemView.getContext().getResources().getColor(R.color.green_700));
+            double tipAmount = 0;
+            if (delivery.getAmounts() != null) {
+                tipAmount = delivery.getAmounts().getTipAmount();
+            }
+            
+            if (tipAmount > 0) {
+                tipText.setText(String.format(Locale.US, "$%.2f", tipAmount));
+                tipText.setTextColor(ContextCompat.getColor(itemView.getContext(), android.R.color.holo_green_dark));
             } else {
                 tipText.setText("No Tip");
-                tipText.setTextColor(itemView.getContext().getResources().getColor(R.color.red_500));
+                tipText.setTextColor(ContextCompat.getColor(itemView.getContext(), android.R.color.holo_red_light));
             }
             
             // Set click listener
@@ -116,11 +150,18 @@ public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.De
                 }
             });
             
-            // Set background color for "Do Not Deliver" addresses
-            if (delivery.isDoNotDeliver()) {
-                itemView.setBackgroundColor(itemView.getContext().getResources().getColor(R.color.red_100));
-            } else {
-                itemView.setBackgroundColor(itemView.getContext().getResources().getColor(android.R.color.transparent));
+            // Set background color based on delivery status
+            if (delivery.getStatus() != null) {
+                if (delivery.getStatus().isCompleted() && delivery.getStatus().isTipped()) {
+                    // Completed and tipped - normal background
+                    itemView.setBackgroundColor(Color.TRANSPARENT);
+                } else if (!delivery.getStatus().isCompleted() && "canceled".equals(delivery.getStatus().getState())) {
+                    // Canceled delivery - light red background
+                    itemView.setBackgroundColor(ContextCompat.getColor(itemView.getContext(), android.R.color.holo_red_light));
+                } else if (delivery.getDisputeInfo() != null && delivery.getDisputeInfo().isHasDispute()) {
+                    // Disputed delivery - light orange background
+                    itemView.setBackgroundColor(ContextCompat.getColor(itemView.getContext(), android.R.color.holo_orange_light));
+                }
             }
         }
     }

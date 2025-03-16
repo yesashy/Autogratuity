@@ -28,41 +28,17 @@
             android:inputType="text" />
     </androidx.cardview.widget.CardView>
 
-    <!-- Map placeholder -->
-    <FrameLayout
-        android:id="@+id/map_container"
+    <!-- Google Map -->    
+    <fragment
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_margin="16dp"
-        android:background="@color/gray_800"
         app:layout_constraintBottom_toTopOf="@+id/action_buttons"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/search_container">
-
-        <!-- Placeholder content (replace with actual map) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_map"
-                app:tint="@color/purple_400"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:padding="16dp"
-                android:text="Map view will display delivery locations with color-coded tip information"
-                android:textColor="@color/gray_400" />
-        </LinearLayout>
-    </FrameLayout>
+        app:layout_constraintTop_toBottomOf="@id/search_container" />
 
     <!-- Action buttons -->
     <LinearLayout
@@ -74,24 +50,33 @@
         app:layout_constraintBottom_toBottomOf="parent">
 
         <Button
-            android:id="@+id/filter_button"
+            android:id="@+id/btnShowRecent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:backgroundTint="@color/gray_800"
-            android:text="Filter"
+            android:text="Recent"
             android:textColor="@color/white" />
 
         <Button
-            android:id="@+id/heatmap_toggle"
+            android:id="@+id/btnShowAll"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:backgroundTint="@color/gray_800"
-            android:text="Heatmap: OFF"
+            android:text="All"
             android:textColor="@color/white" />
     </LinearLayout>
+    
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabRefresh"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:src="@android:drawable/ic_popup_sync"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

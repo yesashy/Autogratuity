@@ -3,7 +3,14 @@ package com.autogratuity.models;
 import com.google.firebase.firestore.DocumentSnapshot;
 import java.util.Map;
 
-public class FirestoreModel {
+public abstract class FirestoreModel {
+    
+    /**
+     * Convert object to Firestore document
+     * 
+     * @return Map representing the object for Firestore
+     */
+    public abstract Map<String, Object> toDocument();
 
     protected static String getString(DocumentSnapshot doc, String field) {
         return getString(doc, field, "");

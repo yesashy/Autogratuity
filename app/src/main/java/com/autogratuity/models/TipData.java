@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Model class for tip data
  */
-public class TipData {
+public class TipData extends FirestoreModel {
     private String id;
     private double amount;
     private String source;
@@ -78,6 +78,11 @@ public class TipData {
         map.put("orderId", orderId);
         map.put("verified", verified);
         return map;
+    }
+    
+    @Override
+    public Map<String, Object> toDocument() {
+        return toMap();
     }
 
     // Getters and setters

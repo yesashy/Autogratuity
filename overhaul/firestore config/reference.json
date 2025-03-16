@@ -1,0 +1,378 @@
+{
+  "meta": {
+    "format": "JSON",
+    "version": "2.0.0",
+    "projectId": "autogratuity-me",
+    "creationTime": 1742095200,
+    "description": "Clean slate Firestore configuration for architectural overhaul"
+  },
+  "indexes": [
+    {
+      "collectionGroup": "deliveries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "times.completedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "deliveries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status.isTipped", "order": "ASCENDING" },
+        { "fieldPath": "times.completedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "addresses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "searchFields.normalizedKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "addresses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "deliveryStats.deliveryCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscription_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "expiryDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sync_operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "data": {
+    "__collections__": {
+      "user_profiles": {
+        "__doc__": {
+          "userId": "",
+          "email": "",
+          "displayName": "",
+          "createdAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "lastLoginAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "subscription": {
+            "status": "free",
+            "level": "",
+            "startDate": null,
+            "expiryDate": null,
+            "isLifetime": false,
+            "provider": "",
+            "orderId": "",
+            "lastVerified": null
+          },
+          "preferences": {
+            "notificationsEnabled": true,
+            "defaultTipPercentage": 15,
+            "useLocation": true,
+            "theme": "system"
+          },
+          "permissions": {
+            "level": "user",
+            "bypassLimits": false,
+            "maxUploads": 100
+          },
+          "usage": {
+            "mappingCount": 0,
+            "deliveryCount": 0,
+            "addressCount": 0,
+            "lastUsageUpdate": null
+          },
+          "syncInfo": {
+            "lastSyncTime": null,
+            "deviceIds": [],
+            "version": 1
+          },
+          "__collections__": {}
+        }
+      },
+      "subscription_records": {
+        "__doc__": {
+          "userId": "",
+          "type": "",
+          "subscriptionLevel": "",
+          "startDate": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "expiryDate": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "orderId": "",
+          "purchaseToken": "",
+          "paymentProvider": "",
+          "transactionId": "",
+          "priceInCents": 0,
+          "currency": "USD",
+          "isActive": false,
+          "metadata": {
+            "source": "",
+            "notes": ""
+          },
+          "createdAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "updatedAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "version": 1,
+          "__collections__": {}
+        }
+      },
+      "addresses": {
+        "__doc__": {
+          "userId": "",
+          "addressId": "",
+          "fullAddress": "",
+          "normalizedAddress": "",
+          "components": {
+            "streetNumber": "",
+            "streetName": "",
+            "city": "",
+            "state": "",
+            "postalCode": "",
+            "country": ""
+          },
+          "location": {
+            "latitude": 0,
+            "longitude": 0,
+            "geohash": ""
+          },
+          "searchFields": {
+            "searchTerms": [],
+            "normalizedKey": ""
+          },
+          "deliveryStats": {
+            "deliveryCount": 0,
+            "tipCount": 0,
+            "totalTips": 0,
+            "averageTip": 0,
+            "lastDeliveryDate": null
+          },
+          "flags": {
+            "doNotDeliver": false,
+            "favorite": false,
+            "verified": false
+          },
+          "metadata": {
+            "createdAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+            "updatedAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+            "source": "",
+            "version": 1
+          },
+          "__collections__": {}
+        }
+      },
+      "deliveries": {
+        "__doc__": {
+          "deliveryId": "",
+          "userId": "",
+          "orderId": "",
+          "reference": {
+            "addressId": "",
+            "platformOrderId": ""
+          },
+          "address": {
+            "fullAddress": "",
+            "normalizedAddress": "",
+            "location": {
+              "latitude": 0,
+              "longitude": 0
+            }
+          },
+          "amounts": {
+            "baseAmount": 0,
+            "estimatedPay": 0,
+            "tipAmount": 0,
+            "tipPercentage": null,
+            "currency": "USD"
+          },
+          "times": {
+            "orderedAt": null,
+            "acceptedAt": null,
+            "completedAt": null,
+            "tippedAt": null
+          },
+          "status": {
+            "state": "created",
+            "isTipped": false,
+            "isCompleted": false,
+            "isVerified": false,
+            "verificationSource": null,
+            "verificationTimestamp": null
+          },
+          "platform": {
+            "name": "",
+            "displayName": ""
+          },
+          "metadata": {
+            "createdAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+            "updatedAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+            "source": "",
+            "version": 1
+          },
+          "__collections__": {}
+        }
+      },
+      "sync_operations": {
+        "__doc__": {
+          "operationId": "",
+          "userId": "",
+          "operationType": "",
+          "entityType": "",
+          "entityId": "",
+          "status": "pending",
+          "priority": 0,
+          "attempts": 0,
+          "maxAttempts": 5,
+          "lastAttemptTime": null,
+          "nextAttemptTime": null,
+          "data": {},
+          "error": null,
+          "createdAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "updatedAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "__collections__": {}
+        }
+      },
+      "user_devices": {
+        "__doc__": {
+          "userId": "",
+          "deviceId": "",
+          "platform": "",
+          "osVersion": "",
+          "appVersion": "",
+          "fcmToken": "",
+          "lastActive": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "lastSyncTime": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "settings": {
+            "notificationsEnabled": true,
+            "syncEnabled": true
+          },
+          "metadata": {
+            "createdAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+            "updatedAt": {"__time__": "1970-01-01T00:00:00.000Z"}
+          },
+          "__collections__": {}
+        }
+      },
+      "system_config": {
+        "notification_patterns": {
+          "patterns": {
+            "shipt": [
+              "You got a \\$(\\d+\\.\\d+) tip for an order delivered on .+ \\(#([A-Z0-9]+)\\)",
+              "You received a \\$(\\d+\\.\\d+) tip for order #([A-Z0-9]+)",
+              "Order #([A-Z0-9]+).*tipped \\$(\\d+\\.\\d+)"
+            ],
+            "doordash": [],
+            "grubhub": [],
+            "ubereats": []
+          },
+          "version": 1,
+          "updatedAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "__collections__": {}
+        },
+        "app_config": {
+          "versions": {
+            "minimum": "1.0.0",
+            "recommended": "1.0.0",
+            "latest": "1.0.0"
+          },
+          "features": {
+            "useNewSyncSystem": true,
+            "enableOfflineMode": true,
+            "enableAnalytics": true,
+            "enableBackgroundSync": true
+          },
+          "limits": {
+            "freeTier": {
+              "mappingLimit": 100,
+              "importLimit": 25,
+              "exportLimit": 100
+            },
+            "proTier": {
+              "mappingLimit": -1,
+              "importLimit": -1,
+              "exportLimit": -1
+            }
+          },
+          "sync": {
+            "interval": 60,
+            "backgroundInterval": 120,
+            "maxBatchSize": 50
+          },
+          "updatedAt": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "version": 1,
+          "__collections__": {}
+        }
+      },
+      "analytics_events": {
+        "__doc__": {
+          "userId": "",
+          "eventType": "",
+          "timestamp": {"__time__": "1970-01-01T00:00:00.000Z"},
+          "data": {},
+          "appVersion": "",
+          "platform": "",
+          "__collections__": {}
+        }
+      }
+    }
+  },
+  "rules": {
+    "rules_version": "2",
+    "service": {
+      "firebase": {
+        "match": {
+          "/databases/{database}/documents": {
+            "match/user_profiles/{userId}": {
+              "allow read: if request.auth != null && request.auth.uid == userId;",
+              "allow write: if request.auth != null && request.auth.uid == userId;"
+            },
+            "match/subscription_records/{recordId}": {
+              "allow read: if request.auth != null && resource.data.userId == request.auth.uid;",
+              "allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;",
+              "allow update: if false;",
+              "allow delete: if false;"
+            },
+            "match/addresses/{addressId}": {
+              "allow read: if request.auth != null && resource.data.userId == request.auth.uid;",
+              "allow write: if request.auth != null && request.resource.data.userId == request.auth.uid;"
+            },
+            "match/deliveries/{deliveryId}": {
+              "allow read: if request.auth != null && resource.data.userId == request.auth.uid;",
+              "allow write: if request.auth != null && request.resource.data.userId == request.auth.uid;"
+            },
+            "match/sync_operations/{operationId}": {
+              "allow read: if request.auth != null && resource.data.userId == request.auth.uid;",
+              "allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;",
+              "allow update: if request.auth != null && resource.data.userId == request.auth.uid;",
+              "allow delete: if false;"
+            },
+            "match/user_devices/{deviceId}": {
+              "allow read: if request.auth != null && resource.data.userId == request.auth.uid;",
+              "allow write: if request.auth != null && request.resource.data.userId == request.auth.uid;"
+            },
+            "match/system_config/{configId}": {
+              "allow read: if request.auth != null;",
+              "allow write: if false;"
+            },
+            "match/analytics_events/{eventId}": {
+              "allow read: if false;",
+              "allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;",
+              "allow update: if false;",
+              "allow delete: if false;"
+            }
+          }
+        }
+      }
+    }
+  }
+}

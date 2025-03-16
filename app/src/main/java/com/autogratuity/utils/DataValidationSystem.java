@@ -4,6 +4,7 @@ import android.util.Log;
 
 import com.autogratuity.models.Address;
 import com.autogratuity.models.DeliveryData;
+import com.autogratuity.repositories.FirestoreRepository;
 import com.autogratuity.repositories.IFirestoreRepository;
 
 import java.util.ArrayList;
@@ -51,9 +52,13 @@ public class DataValidationSystem {
                     continue;
                 }
 
-                // Check for duplicates if needed
+                // Check for duplicates if needed - use direct repository cast for access to implementation
                 if (skipDuplicates || updateExisting) {
-                    boolean isDuplicate = repository.checkForDuplicateDelivery(delivery);
+                    // Use repository method to check for duplicates if available
+                    boolean isDuplicate = false;
+                    if (repository instanceof FirestoreRepository) {
+                        isDuplicate = ((FirestoreRepository) repository).checkForDuplicateDelivery(delivery);
+                    }
                     
                     if (isDuplicate) {
                         if (skipDuplicates) {
@@ -82,6 +87,19 @@ public class DataValidationSystem {
 
         result.setValidatedDeliveries(validatedDeliveries);
         return result;
+    }
+
+    /**
+     * Check if delivery is a duplicate - public method that can be used from ImportManager
+     * 
+     * @param delivery The delivery to check
+     * @return true if it's a duplicate, false otherwise
+     */
+    public boolean checkForDuplicateDelivery(DeliveryData delivery) {
+        if (repository instanceof FirestoreRepository) {
+            return ((FirestoreRepository) repository).checkForDuplicateDelivery(delivery);
+        }
+        return false;
     }
 
     /**

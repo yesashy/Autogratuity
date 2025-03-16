@@ -73,6 +73,21 @@
                     android:text="1. Export your Google Maps places as KML/KMZ\n2. Import to process order IDs in your place labels"
                     android:textColor="@color/gray_300" />
 
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="CSV Format (Standard)"
+                    android:textColor="@color/white"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="1. Use standard spreadsheet exports like Excel or Google Sheets\n2. Ensure columns for address, order ID, and tip amount\n3. Import to quickly add multiple deliveries at once"
+                    android:textColor="@color/gray_300" />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
@@ -110,6 +125,18 @@
                 app:iconGravity="textStart" />
 
         </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/import_csv_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/gray_700"
+            android:text="Import CSV"
+            android:textColor="@color/white"
+            app:cornerRadius="8dp"
+            app:icon="@drawable/ic_upload"
+            app:iconGravity="textStart" />
 
         <FrameLayout
             android:layout_width="match_parent"

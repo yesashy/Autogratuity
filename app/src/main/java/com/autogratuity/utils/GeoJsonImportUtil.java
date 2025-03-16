@@ -198,7 +198,19 @@ public class GeoJsonImportUtil {
             final Address address = new Address();
             address.setFullAddress(name);
             address.setCoordinates(coordinates);
-            address.setNormalizedAddress(name.toLowerCase().trim());
+            // Normalize address and create search terms
+            String normalizedAddress = name.toLowerCase().trim();
+            address.setNormalizedAddress(normalizedAddress);
+            
+            // Create search terms for improved searching
+            List<String> searchTerms = new ArrayList<>();
+            String[] addressParts = normalizedAddress.split("\\s+");
+            for (String part : addressParts) {
+                if (!part.isEmpty()) {
+                    searchTerms.add(part);
+                }
+            }
+            address.setSearchTerms(searchTerms);
             
             // Try to extract order ID from name or description
             String orderId = extractOrderId(name);
@@ -211,9 +223,9 @@ public class GeoJsonImportUtil {
             try {
                 // Simple extraction for demo - can be enhanced with regex
                 if (description.contains("$")) {
-                    final String[] parts = description.split("\\$");
-                    if (parts.length > 1) {
-                        final String amountStr = parts[1].split("\\s+")[0].trim();
+                    final String[] descParts = description.split("\\$");
+                    if (descParts.length > 1) {
+                        final String amountStr = descParts[1].split("\\s+")[0].trim();
                         tipAmount = Double.parseDouble(amountStr);
                     }
                 }

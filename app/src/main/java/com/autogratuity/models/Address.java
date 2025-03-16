@@ -3,14 +3,17 @@ package com.autogratuity.models;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.GeoPoint;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Model class for address data
  */
-public class Address {
+public class Address extends FirestoreModel {
     private String id;
+    private String userId;
     private String fullAddress;
     private String normalizedAddress;
     private Coordinates coordinates;
@@ -19,12 +22,14 @@ public class Address {
     private boolean doNotDeliver;
     private long lastDeliveryTimestamp;
     private String notes;
+    private List<String> searchTerms;
 
     /**
      * Default constructor
      */
     public Address() {
         this.id = "";
+        this.userId = "";
         this.fullAddress = "";
         this.normalizedAddress = "";
         this.coordinates = new Coordinates();
@@ -33,6 +38,7 @@ public class Address {
         this.doNotDeliver = false;
         this.lastDeliveryTimestamp = System.currentTimeMillis();
         this.notes = "";
+        this.searchTerms = new ArrayList<>();
     }
 
     /**
@@ -48,6 +54,10 @@ public class Address {
 
         Address address = new Address();
         address.setId(document.getId());
+
+        if (document.contains("userId") && document.get("userId") != null) {
+            address.setUserId(document.getString("userId"));
+        }
 
         if (document.contains("fullAddress") && document.get("fullAddress") != null) {
             address.setFullAddress(document.getString("fullAddress"));
@@ -95,6 +105,14 @@ public class Address {
         if (document.contains("notes") && document.get("notes") != null) {
             address.setNotes(document.getString("notes"));
         }
+        
+        // Get search terms if available
+        if (document.contains("searchTerms") && document.get("searchTerms") != null) {
+            List<String> terms = (List<String>) document.get("searchTerms");
+            if (terms != null) {
+                address.setSearchTerms(terms);
+            }
+        }
 
         return address;
     }
@@ -106,6 +124,7 @@ public class Address {
      */
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
+        map.put("userId", userId);
         map.put("fullAddress", fullAddress);
         map.put("normalizedAddress", normalizedAddress);
         
@@ -120,7 +139,18 @@ public class Address {
         map.put("doNotDeliver", doNotDeliver);
         map.put("lastDeliveryTimestamp", lastDeliveryTimestamp);
         map.put("notes", notes);
+        
+        // Add search terms if available
+        if (searchTerms != null && !searchTerms.isEmpty()) {
+            map.put("searchTerms", searchTerms);
+        }
+        
         return map;
+    }
+    
+    @Override
+    public Map<String, Object> toDocument() {
+        return toMap();
     }
 
     /**
@@ -140,6 +170,14 @@ public class Address {
 
     public void setId(String id) {
         this.id = id;
+    }
+    
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public String getFullAddress() {
@@ -226,5 +264,23 @@ public class Address {
             total += newTipAmount;
             averageTip = total / (deliveryCount + 1);
         }
+    }
+    
+    /**
+     * Get search terms for this address
+     * 
+     * @return List of search terms
+     */
+    public List<String> getSearchTerms() {
+        return searchTerms;
+    }
+    
+    /**
+     * Set search terms for this address
+     * 
+     * @param searchTerms List of search terms
+     */
+    public void setSearchTerms(List<String> searchTerms) {
+        this.searchTerms = searchTerms;
     }
 }

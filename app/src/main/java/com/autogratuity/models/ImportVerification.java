@@ -9,7 +9,7 @@ import java.util.Map;
  * Model class for import verification status
  * Tracks metadata about data verification
  */
-public class ImportVerification {
+public class ImportVerification extends FirestoreModel {
     private boolean verifiedByPro;
     private Timestamp verificationTimestamp;
     private String verificationSource;
@@ -41,6 +41,11 @@ public class ImportVerification {
         }
         
         return map;
+    }
+    
+    @Override
+    public Map<String, Object> toDocument() {
+        return toMap();
     }
 
     // Getters and setters

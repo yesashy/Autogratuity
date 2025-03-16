@@ -1,9 +1,13 @@
 package com.autogratuity.fragments;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -13,36 +17,43 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.autogratuity.R;
 import com.autogratuity.adapters.DeliveriesAdapter;
-import com.autogratuity.models.Delivery;
-import com.autogratuity.repositories.FirestoreRepository;
-import com.autogratuity.repositories.IFirestoreRepository;
-import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.repository.DataRepository;
+import com.autogratuity.data.repository.RepositoryProvider;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
+
 /**
- * Fragment for displaying the list of deliveries
+ * Fragment for displaying the list of deliveries.
+ * Implements the repository pattern with RxJava for efficient data handling.
  */
 public class DeliveriesFragment extends Fragment {
+    private static final String TAG = "DeliveriesFragment";
     
-    private IFirestoreRepository repository;
-    private RecyclerView deliveriesRecyclerView;
+    // UI elements
+    private RecyclerView recyclerView;
+    private ProgressBar loadingIndicator;
+    private TextView emptyView;
+    private TextView errorView;
+    private FloatingActionButton fabAddDelivery;
+    
+    // Data
+    private DataRepository repository;
     private DeliveriesAdapter adapter;
+    private List<Delivery> deliveries = new ArrayList<>();
+    private CompositeDisposable disposables = new CompositeDisposable();
     
     /**
      * Factory method to create a new instance of the fragment
      */
     public static DeliveriesFragment newInstance() {
         return new DeliveriesFragment();
-    }
-    
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        
-        // Initialize repository
-        repository = FirestoreRepository.getInstance();
     }
     
     @Nullable
@@ -55,54 +66,264 @@ public class DeliveriesFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         
-        // Set up UI components
-        setupUI(view);
+        // Get repository instance from provider
+        repository = RepositoryProvider.getRepository();
         
-        // Load data
-        loadData();
+        // Initialize UI components
+        initializeViews(view);
+        
+        // Set up RecyclerView and adapter
+        setupRecyclerView();
+        
+        // Load initial data
+        loadDeliveries();
     }
     
     /**
-     * Set up UI components
+     * Initialize UI elements
      */
-    private void setupUI(View view) {
-        deliveriesRecyclerView = view.findViewById(R.id.deliveries_recycler_view);
-        deliveriesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+    private void initializeViews(View view) {
+        // Find views
+        recyclerView = view.findViewById(R.id.deliveries_recycler_view);
+        loadingIndicator = view.findViewById(R.id.loading_indicator);
+        emptyView = view.findViewById(R.id.empty_view);
+        errorView = view.findViewById(R.id.error_view);
+        fabAddDelivery = view.findViewById(R.id.fab_add_delivery);
         
-        // Create a click listener for deliveries
+        // Add loading, empty, and error views if they don't exist
+        if (loadingIndicator == null) {
+            addMissingViews(view);
+        }
+        
+        // Set up FAB click listener
+        if (fabAddDelivery != null) {
+            fabAddDelivery.setOnClickListener(v -> {
+                // Navigate to add delivery screen
+                // TODO: Implement add delivery navigation
+                Toast.makeText(getContext(), "Add delivery functionality coming soon", Toast.LENGTH_SHORT).show();
+            });
+        }
+    }
+    
+    /**
+     * Add missing views if they don't exist in the layout
+     * This ensures compatibility with the existing layout
+     */
+    private void addMissingViews(View rootView) {
+        ViewGroup parent = (ViewGroup) rootView;
+        
+        // Add loading indicator if it doesn't exist
+        if (loadingIndicator == null) {
+            loadingIndicator = new ProgressBar(getContext());
+            loadingIndicator.setId(View.generateViewId());
+            loadingIndicator.setVisibility(View.GONE);
+            
+            ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            loadingIndicator.setLayoutParams(params);
+            parent.addView(loadingIndicator);
+        }
+        
+        // Add error view if it doesn't exist
+        if (errorView == null) {
+            errorView = new TextView(getContext());
+            errorView.setId(View.generateViewId());
+            errorView.setVisibility(View.GONE);
+            errorView.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+            
+            ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            errorView.setLayoutParams(params);
+            parent.addView(errorView);
+        }
+    }
+    
+    /**
+     * Set up RecyclerView and adapter
+     */
+    private void setupRecyclerView() {
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        
+        // Create delivery click listener
         DeliveriesAdapter.OnDeliveryClickListener clickListener = delivery -> {
-            // Handle delivery click (show details, etc.)
+            // Handle delivery click
+            // TODO: Navigate to delivery details
+            Toast.makeText(getContext(), "Delivery clicked: " + delivery.getOrderId(), Toast.LENGTH_SHORT).show();
         };
         
-        // Set up adapter with empty list initially
-        adapter = new DeliveriesAdapter(new ArrayList<>(), clickListener);
-        deliveriesRecyclerView.setAdapter(adapter);
+        // Create and set adapter
+        adapter = new DeliveriesAdapter(deliveries, clickListener);
+        recyclerView.setAdapter(adapter);
     }
     
     /**
-     * Load data from repository
+     * Load deliveries from repository
      */
-    private void loadData() {
-        if (getContext() == null) return;
+    private void loadDeliveries() {
+        // Show loading indicator
+        showLoading(true);
         
-        // Get recent deliveries (limit to 50)
-        repository.getRecentDeliveries(50)
-                .addOnSuccessListener(querySnapshot -> {
-                    List<Delivery> deliveries = new ArrayList<>();
-                    
-                    // Convert query results to Delivery objects
-                    for (QueryDocumentSnapshot document : querySnapshot) {
-                        Delivery delivery = Delivery.fromDocument(document);
-                        if (delivery != null) {
-                            deliveries.add(delivery);
-                        }
-                    }
-                    
-                    // Update adapter with new data
-                    adapter.updateDeliveries(deliveries);
-                })
-                .addOnFailureListener(e -> {
-                    // Handle errors
-                });
+        // Clear any existing subscriptions
+        disposables.clear();
+        
+        // Use repository to get deliveries (limit to 50 recent deliveries)
+        disposables.add(
+            repository.getDeliveries(50, null)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    this::onDeliveriesLoaded,
+                    this::onError
+                )
+        );
+    }
+    
+    /**
+     * Set up real-time delivery updates
+     */
+    private void observeDeliveries() {
+        disposables.add(
+            repository.observeDeliveries()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    this::onDeliveriesLoaded,
+                    this::onError
+                )
+        );
+    }
+    
+    /**
+     * Handle loaded deliveries
+     */
+    private void onDeliveriesLoaded(List<Delivery> loadedDeliveries) {
+        // Hide loading indicator
+        showLoading(false);
+        
+        // Update adapter with new data
+        deliveries.clear();
+        deliveries.addAll(loadedDeliveries);
+        adapter.updateDeliveries(loadedDeliveries);
+        
+        // Show/hide empty view
+        if (deliveries.isEmpty()) {
+            showEmptyState();
+        } else {
+            showContent();
+        }
+    }
+    
+    /**
+     * Handle error loading deliveries
+     */
+    private void onError(Throwable error) {
+        Log.e(TAG, "Error loading deliveries", error);
+        
+        // Hide loading indicator
+        showLoading(false);
+        
+        // Show error message
+        showError(error.getMessage());
+    }
+    
+    /**
+     * Show loading state
+     */
+    private void showLoading(boolean isLoading) {
+        if (loadingIndicator != null) {
+            loadingIndicator.setVisibility(isLoading ? View.VISIBLE : View.GONE);
+        }
+        
+        if (isLoading) {
+            recyclerView.setVisibility(View.GONE);
+            
+            if (emptyView != null) {
+                emptyView.setVisibility(View.GONE);
+            }
+            
+            if (errorView != null) {
+                errorView.setVisibility(View.GONE);
+            }
+        }
+    }
+    
+    /**
+     * Show content (recycler view)
+     */
+    private void showContent() {
+        recyclerView.setVisibility(View.VISIBLE);
+        
+        if (emptyView != null) {
+            emptyView.setVisibility(View.GONE);
+        }
+        
+        if (errorView != null) {
+            errorView.setVisibility(View.GONE);
+        }
+    }
+    
+    /**
+     * Show empty state
+     */
+    private void showEmptyState() {
+        if (emptyView != null) {
+            emptyView.setVisibility(View.VISIBLE);
+            recyclerView.setVisibility(View.GONE);
+        } else {
+            // If no empty view exists, show recycler view with no items
+            recyclerView.setVisibility(View.VISIBLE);
+        }
+        
+        if (errorView != null) {
+            errorView.setVisibility(View.GONE);
+        }
+    }
+    
+    /**
+     * Show error state
+     */
+    private void showError(String message) {
+        if (errorView != null) {
+            errorView.setText(message != null ? message : "Unknown error occurred");
+            errorView.setVisibility(View.VISIBLE);
+            recyclerView.setVisibility(View.GONE);
+            
+            if (emptyView != null) {
+                emptyView.setVisibility(View.GONE);
+            }
+        } else {
+            // If no error view exists, show toast instead
+            if (getContext() != null) {
+                Toast.makeText(getContext(), "Error: " + message, Toast.LENGTH_LONG).show();
+            }
+            
+            // Show empty recycler view
+            recyclerView.setVisibility(View.VISIBLE);
+        }
+    }
+    
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Start observing deliveries when the fragment is visible
+        observeDeliveries();
+    }
+    
+    @Override
+    public void onPause() {
+        // Clear all subscriptions to prevent memory leaks
+        disposables.clear();
+        super.onPause();
+    }
+    
+    @Override
+    public void onDestroyView() {
+        // Ensure all subscriptions are cleared
+        disposables.clear();
+        super.onDestroyView();
     }
 }

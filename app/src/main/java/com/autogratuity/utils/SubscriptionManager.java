@@ -60,6 +60,7 @@ public class SubscriptionManager implements PurchasesUpdatedListener {
     private FirebaseAuth mAuth;
     private List<ProductDetails> productDetailsList = new ArrayList<>();
     private SubscriptionStatusListener statusListener;
+    private PurchasesUpdatedListener purchasesUpdatedListener;
 
     private SubscriptionManager(Context context) {
         this.context = context.getApplicationContext();
@@ -91,6 +92,13 @@ public class SubscriptionManager implements PurchasesUpdatedListener {
      */
     public void setStatusListener(SubscriptionStatusListener listener) {
         this.statusListener = listener;
+    }
+    
+    /**
+     * Set a listener for purchases updated (to support repository integration)
+     */
+    public void setListener(PurchasesUpdatedListener listener) {
+        this.purchasesUpdatedListener = listener;
     }
 
     /**
@@ -168,7 +176,7 @@ public class SubscriptionManager implements PurchasesUpdatedListener {
     /**
      * Query existing purchases
      */
-    private void queryPurchases() {
+    public void queryPurchases() {
         // Check subscriptions
         QueryPurchasesParams subscriptionParams = QueryPurchasesParams.newBuilder()
                 .setProductType(BillingClient.ProductType.SUBS)
@@ -218,21 +226,23 @@ public class SubscriptionManager implements PurchasesUpdatedListener {
     /**
      * Acknowledge a purchase
      */
-    private void acknowledgePurchase(Purchase purchase) {
-        AcknowledgePurchaseParams params = AcknowledgePurchaseParams.newBuilder()
-                .setPurchaseToken(purchase.getPurchaseToken())
-                .build();
+    public void acknowledgePurchase(Purchase purchase) {
+        if (!purchase.isAcknowledged()) {
+            AcknowledgePurchaseParams params = AcknowledgePurchaseParams.newBuilder()
+                    .setPurchaseToken(purchase.getPurchaseToken())
+                    .build();
 
-        billingClient.acknowledgePurchase(params, new AcknowledgePurchaseResponseListener() {
-            @Override
-            public void onAcknowledgePurchaseResponse(@NonNull BillingResult billingResult) {
-                if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-                    Log.d(TAG, "Purchase acknowledged: " + purchase.getOrderId());
-                } else {
-                    Log.e(TAG, "Failed to acknowledge purchase: " + billingResult.getDebugMessage());
+            billingClient.acknowledgePurchase(params, new AcknowledgePurchaseResponseListener() {
+                @Override
+                public void onAcknowledgePurchaseResponse(@NonNull BillingResult billingResult) {
+                    if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+                        Log.d(TAG, "Purchase acknowledged: " + purchase.getOrderId());
+                    } else {
+                        Log.e(TAG, "Failed to acknowledge purchase: " + billingResult.getDebugMessage());
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     /**
@@ -472,11 +482,23 @@ public class SubscriptionManager implements PurchasesUpdatedListener {
         if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK && purchases != null) {
             // Process new purchases
             processPurchases(purchases);
+            
+            // Notify custom listener if set
+            if (purchasesUpdatedListener != null) {
+                purchasesUpdatedListener.onPurchasesUpdated(purchases);
+            }
         } else if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.USER_CANCELED) {
             Log.d(TAG, "User canceled the purchase");
         } else {
             Log.e(TAG, "Purchase update error: " + billingResult.getDebugMessage());
         }
+    }
+    
+    /**
+     * Interface for purchases updated listener
+     */
+    public interface PurchasesUpdatedListener {
+        void onPurchasesUpdated(List<Purchase> purchases);
     }
 
     /**

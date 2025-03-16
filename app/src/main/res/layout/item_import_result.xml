@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="8dp"
     android:layout_marginBottom="8dp"
-    app:cardBackgroundColor="@color/green_800"
+    app:cardBackgroundColor="@color/gray_800"
     app:cardCornerRadius="8dp"
     app:cardElevation="2dp">
 
@@ -20,18 +19,18 @@
             android:id="@+id/result_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:text="Import Results"
             android:textColor="@color/white"
             android:textSize="16sp"
-            android:textStyle="bold"
-            tools:text="Import Results" />
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/result_details"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textColor="@color/white"
-            tools:text="Total locations: 100\nSuccessfully imported: 95\nFailed imports: 5\nDuplicate entries: 12" />
+            android:text="Details will appear here..."
+            android:textColor="@color/gray_300" />
 
     </LinearLayout>
 

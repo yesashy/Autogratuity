@@ -120,15 +120,17 @@ public class BulkUploadFragment extends Fragment {
         });
         
         // Set up CSV import button
-        importCsvButton.setOnClickListener(v -> {
-            // Check if user has available mappings
-            if (!usageTracker.canAddMapping() && !usageTracker.isPro()) {
-                showFreeTierLimitReachedDialog();
-                return;
-            }
-            
-            openFileChooser(REQUEST_CSV_FILE, "text/csv", "application/vnd.ms-excel");
-        });
+        if (importCsvButton != null) {
+            importCsvButton.setOnClickListener(v -> {
+                // Check if user has available mappings
+                if (!usageTracker.canAddMapping() && !usageTracker.isPro()) {
+                    showFreeTierLimitReachedDialog();
+                    return;
+                }
+                
+                openFileChooser(REQUEST_CSV_FILE, "text/csv", "application/vnd.ms-excel");
+            });
+        }
         
         // Initialize with empty status
         updateStatus("", false);

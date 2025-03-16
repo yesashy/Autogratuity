@@ -34,16 +34,7 @@
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
 
-        <activity
-            android:name=".TestFirebaseActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <!-- Login Activity -->
+        <!-- Login Activity - Single LAUNCHER activity -->
         <activity
             android:name=".LoginActivity"
             android:exported="true">
@@ -75,6 +66,12 @@
             android:exported="false"
             android:theme="@style/Theme.Autogratuity"
             android:label="Knowledge Base" />
+
+        <!-- WebApp Activity -->
+        <activity
+            android:name=".WebAppActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Autogratuity" />
 
         <!-- Notification Listener Service - Free Feature -->
         <service
