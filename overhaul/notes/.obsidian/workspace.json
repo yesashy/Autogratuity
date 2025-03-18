@@ -1,0 +1,190 @@
+{
+  "main": {
+    "id": "1866b3fb0fc29b1c",
+    "type": "split",
+    "children": [
+      {
+        "id": "2538aa63e9ee56fc",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "17c119a87c9939cd",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "ADAPTER_MIGRATION_ANALYSIS.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "ADAPTER_MIGRATION_ANALYSIS"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "7ba72657f235514f",
+    "type": "split",
+    "children": [
+      {
+        "id": "5faba6c0601f8193",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e8740959a05c57de",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": true
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "c4cad05b336d205f",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "b3daa913ea30d9d2",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "826deb6154553c47",
+    "type": "split",
+    "children": [
+      {
+        "id": "9063b7570a805cd0",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f01becc73a08bd60",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "ADAPTER_MIGRATION_ANALYSIS.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for ADAPTER_MIGRATION_ANALYSIS"
+            }
+          },
+          {
+            "id": "819818ab8b79671c",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "ADAPTER_MIGRATION_ANALYSIS.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from ADAPTER_MIGRATION_ANALYSIS"
+            }
+          },
+          {
+            "id": "73ae2e3025ff061a",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "ce23581bbc8cef92",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "ADAPTER_MIGRATION_ANALYSIS.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of ADAPTER_MIGRATION_ANALYSIS"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false
+    }
+  },
+  "active": "17c119a87c9939cd",
+  "lastOpenFiles": [
+    "Untitled.canvas",
+    "Untitled 2.md",
+    "Untitled 2.canvas",
+    "Untitled-1 1.json",
+    "Untitled-1.json",
+    "Untitled.md",
+    "Untitled 1.md",
+    "Untitled 1.canvas",
+    "UI Overhaul - Critical.md",
+    "ADAPTER_MIGRATION_ANALYSIS.md",
+    "f",
+    "Autogratuity Architectural Flow.md",
+    "Autogratuity Build Error Fixes.md",
+    "Build Error Log.md",
+    "build resolve checklist.md",
+    "codebase_structure.md"
+  ]
+}

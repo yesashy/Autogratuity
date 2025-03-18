@@ -344,6 +344,14 @@ public class Address {
         return addressId;
     }
     
+    /**
+     * Get the unique identifier for this address
+     * @return String ID
+     */
+    public String getId() {
+        return addressId;
+    }
+    
     public void setAddressId(String addressId) {
         this.addressId = addressId;
     }
@@ -434,6 +442,14 @@ public class Address {
     
     public void setFlags(Flags flags) {
         this.flags = flags;
+    }
+    
+    /**
+     * Check if address is marked as favorite
+     * @return true if favorite
+     */
+    public boolean isFavorite() {
+        return flags != null && flags.isFavorite();
     }
     
     public Metadata getMetadata() {

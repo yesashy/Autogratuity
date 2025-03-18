@@ -12,15 +12,20 @@ import androidx.work.WorkManager;
 
 import com.autogratuity.data.model.Address;
 import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.model.ErrorInfo;
 import com.autogratuity.data.model.SubscriptionStatus;
 import com.autogratuity.data.model.SyncOperation;
 import com.autogratuity.data.model.SyncStatus;
 import com.autogratuity.data.model.UserProfile;
 import com.autogratuity.data.repository.core.FirestoreRepository;
+import com.autogratuity.data.repository.core.RepositoryProvider;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.Source;
+import com.google.firebase.firestore.AggregateSource;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.Transaction;
 import com.google.firebase.firestore.WriteBatch;
@@ -32,6 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Completable;
@@ -84,6 +90,14 @@ public class SyncRepositoryImpl extends FirestoreRepository implements SyncRepos
         
         // Start monitoring network status
         startNetworkMonitoring();
+    }
+    
+    /**
+     * Get the current user ID.
+     * @return The user ID string
+     */
+    protected String getUserId() {
+        return getCurrentUserId();
     }
     
     /**
@@ -277,7 +291,7 @@ public class SyncRepositoryImpl extends FirestoreRepository implements SyncRepos
                     .whereEqualTo("status", SyncOperation.STATUS_PENDING)
                     .orderBy("priority", Query.Direction.DESCENDING) // Higher priority first
                     .orderBy("createdAt", Query.Direction.ASCENDING) // Oldest first
-                    .get()
+                    .get(Source.SERVER)
                     .addOnSuccessListener(querySnapshot -> {
                         List<SyncOperation> operations = new ArrayList<>();
                         
@@ -576,9 +590,12 @@ public class SyncRepositoryImpl extends FirestoreRepository implements SyncRepos
             
             if (operation.getError() != null) {
                 Map<String, Object> errorMap = new HashMap<>();
-                errorMap.put("code", operation.getError().getCode());
-                errorMap.put("message", operation.getError().getMessage());
-                errorMap.put("timestamp", operation.getError().getTimestamp());
+                ErrorInfo errorInfo = operation.getErrorInfo();
+                if (errorInfo != null) {
+                    errorMap.put("code", errorInfo.getCode());
+                    errorMap.put("message", errorInfo.getMessage());
+                    errorMap.put("timestamp", errorInfo.getTimestamp());
+                }
                 updates.put("error", errorMap);
             }
             
@@ -869,8 +886,14 @@ public class SyncRepositoryImpl extends FirestoreRepository implements SyncRepos
         })
         .flatMapCompletable(operation -> {
             // Reset operation status
-            operation.setStatus(SyncOperation.STATUS_PENDING);
-            operation.setUpdatedAt(new Date());
+            if (operation instanceof SyncOperation) {
+                ((SyncOperation)operation).setStatus(SyncOperation.STATUS_PENDING);
+                ((SyncOperation)operation).setUpdatedAt(new Date());
+            } else {
+                // Handle the case where operation is not a SyncOperation
+                Log.w(TAG, "Operation is not a SyncOperation instance");
+                return Completable.error(new ClassCastException("Operation is not a SyncOperation instance"));
+            }
             
             // Update operation in Firestore
             return Completable.create(emitter -> {
@@ -889,7 +912,7 @@ public class SyncRepositoryImpl extends FirestoreRepository implements SyncRepos
                             
                             // Process the operation if online
                             if (isNetworkAvailable()) {
-                                processSyncOperation(operation)
+                                processSyncOperation((SyncOperation)operation)
                                         .subscribe(
                                                 () -> emitter.onComplete(),
                                                 emitter::onError
@@ -1053,7 +1076,7 @@ public class SyncRepositoryImpl extends FirestoreRepository implements SyncRepos
                     .whereEqualTo("userId", getUserId())
                     .whereEqualTo("status", SyncOperation.STATUS_PENDING)
                     .count()
-                    .get()
+                    .get(AggregateSource.SERVER)
                     .addOnSuccessListener(countQuery -> {
                         Integer count = 0;
                         if (countQuery != null) {
@@ -1203,7 +1226,7 @@ public class SyncRepositoryImpl extends FirestoreRepository implements SyncRepos
         @Override
         public Result doWork() {
             // Get repository instance
-            SyncRepository syncRepo = (SyncRepository) RepositoryProvider.getRepository();
+            SyncRepository syncRepo = RepositoryProvider.getSyncRepository();
             
             try {
                 // Perform sync

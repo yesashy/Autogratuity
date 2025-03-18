@@ -64,4 +64,33 @@ public interface ConfigRepository extends DataRepository {
      */
     @Override
     Completable prefetchCriticalData();
+    
+    /**
+     * Get a configuration value as a string.
+     * @param key The configuration key
+     * @param defaultValue Default value if not found
+     * @return The configuration value
+     */
+    String getConfigValue(String key, String defaultValue);
+    
+    /**
+     * Get a configuration value as a boolean.
+     * @param key The configuration key
+     * @param defaultValue Default value if not found
+     * @return The configuration value
+     */
+    boolean getConfigBoolean(String key, boolean defaultValue);
+    
+    /**
+     * Increment a counter value.
+     * @param counterKey The counter key to increment
+     * @return Completable that completes when counter is incremented
+     */
+    Completable incrementCounter(String counterKey);
+    
+    /**
+     * Return a no-op completable that just completes immediately.
+     * @return Completable that completes immediately
+     */
+    Completable noOpCompletable();
 }

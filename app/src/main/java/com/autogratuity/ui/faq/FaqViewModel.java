@@ -8,6 +8,7 @@ import androidx.lifecycle.MutableLiveData;
 import com.autogratuity.data.repository.config.ConfigRepository;
 import com.autogratuity.ui.common.BaseViewModel;
 
+import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.schedulers.Schedulers;
 
@@ -59,7 +60,7 @@ public class FaqViewModel extends BaseViewModel {
         
         // Try to load custom FAQ content from config repository
         disposables.add(
-            configRepository.getConfigValue("faq_content", "")
+            Single.fromCallable(() -> configRepository.getConfigValue("faq_content", ""))
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
@@ -88,7 +89,7 @@ public class FaqViewModel extends BaseViewModel {
      */
     public void loadFaqTitle() {
         disposables.add(
-            configRepository.getConfigValue("faq_title", "Knowledge Base")
+            Single.fromCallable(() -> configRepository.getConfigValue("faq_title", "Knowledge Base"))
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
@@ -108,7 +109,7 @@ public class FaqViewModel extends BaseViewModel {
     public void trackFaqView() {
         // Track that user viewed the FAQ
         disposables.add(
-            configRepository.getConfigBoolean("track_faq_views", true)
+            Single.fromCallable(() -> configRepository.getConfigBoolean("track_faq_views", true))
                 .subscribeOn(Schedulers.io())
                 .flatMapCompletable(shouldTrack -> {
                     if (shouldTrack) {

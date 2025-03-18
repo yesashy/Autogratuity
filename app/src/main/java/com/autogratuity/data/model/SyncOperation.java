@@ -3,6 +3,7 @@ package com.autogratuity.data.model;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentId;
 
+import com.autogratuity.data.model.ErrorInfo;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +37,7 @@ public class SyncOperation {
     private boolean completed;
     private boolean failed;
     private String error;
+    private ErrorInfo errorInfo;
     private int attempts;
     private Timestamp createdAt;
     private Timestamp updatedAt;
@@ -143,8 +145,28 @@ public class SyncOperation {
         this.failed = failed;
     }
     
+    /**
+     * Get the error message.
+     * @return String error message
+     * @deprecated Use getErrorInfo() instead for more structured error information
+     */
     public String getError() {
         return error;
+    }
+    
+    /**
+     * Get detailed error information.
+     * @return ErrorInfo object or null if no error
+     */
+    public ErrorInfo getErrorInfo() {
+        if (error == null) return null;
+        
+        // Use existing errorInfo if available, otherwise create one
+        if (errorInfo != null) {
+            return errorInfo;
+        }
+        
+        return new ErrorInfo("error", error, updatedAt != null ? updatedAt.toDate() : null);
     }
     
     public void setError(String error) {
@@ -271,18 +293,30 @@ public class SyncOperation {
     }
     
     /**
-     * Get error message.
-     * @return String error message
-     */
-    public String getErrorMessage() {
-        return error;
-    }
-    
-    /**
      * Get error timestamp.
      * @return String error timestamp
      */
     public String getErrorTimestamp() {
         return updatedAt != null ? updatedAt.toString() : null;
+    }
+    
+    /**
+     * Mark operation as failed with error details
+     * @param errorCode Error code
+     * @param errorMessage Error message
+     */
+    public void markAsFailed(String errorCode, String errorMessage) {
+        this.failed = true;
+        this.completed = false;
+        this.error = errorMessage;
+        this.attempts++;
+        
+        // Calculate next retry time with exponential backoff
+        long delayMillis = Math.min(1000 * (long) Math.pow(2, this.attempts), 3600000); // Max 1 hour
+        Date nextAttempt = new Date(System.currentTimeMillis() + delayMillis);
+        this.nextAttemptTime = new Timestamp(nextAttempt);
+        
+        // Create error info object
+        this.errorInfo = new ErrorInfo(errorCode, errorMessage, new Date());
     }
 }

@@ -1,0 +1,29 @@
+{
+	"nodes": [
+		{"id": "core_repository", "x": 0, "y": 0, "color": "#1E88E5", "label": "Core Repository\nDataRepository Interface\nFirestoreRepository Base"},
+		{"id": "repository_provider", "x": 300, "y": 0, "color": "#4CAF50", "label": "Repository Provider\nCentralized Access\nDomain Repository Management"},
+		{"id": "preference_repo", "x": -300, "y": 300, "color": "#03A9F4", "label": "Preference Repository\nUser Profile\nSettings Management"},
+		{"id": "delivery_repo", "x": -100, "y": 300, "color": "#FF5722", "label": "Delivery Repository\nDelivery Tracking\nStatistics"},
+		{"id": "subscription_repo", "x": 100, "y": 300, "color": "#8BC34A", "label": "Subscription Repository\nPro User Management\nSubscription Tracking"},
+		{"id": "address_repo", "x": 300, "y": 300, "color": "#FFC107", "label": "Address Repository\nAddress Management\nGeocoding"},
+		{"id": "sync_repo", "x": -300, "y": 300, "color": "#FF9800", "label": "Sync Repository\nBackground Synchronization\nConflict Resolution"},
+		{"id": "ui_layer", "x": 0, "y": 600, "color": "#673AB7", "label": "UI Layer\nMaterial Design Components\nViewModel Integration"},
+		{"id": "network_monitor", "x": -300, "y": 600, "color": "#E91E63", "label": "Network Monitor\nConnectivity Tracking\nOffline Support"},
+		{"id": "security_layer", "x": 300, "y": 600, "color": "#795548", "label": "Security Layer\nAuthentication\nEncryption\nValidation"}
+	],
+	"edges": [
+		{"fromNode": "core_repository", "toNode": "repository_provider", "label": "Defines Base Interface"},
+		{"fromNode": "repository_provider", "toNode": "preference_repo", "label": "Provides Access"},
+		{"fromNode": "repository_provider", "toNode": "delivery_repo", "label": "Provides Access"},
+		{"fromNode": "repository_provider", "toNode": "subscription_repo", "label": "Provides Access"},
+		{"fromNode": "repository_provider", "toNode": "address_repo", "label": "Provides Access"},
+		{"fromNode": "repository_provider", "toNode": "sync_repo", "label": "Provides Access"},
+		{"fromNode": "preference_repo", "toNode": "ui_layer", "label": "Data Flow"},
+		{"fromNode": "delivery_repo", "toNode": "ui_layer", "label": "Data Flow"},
+		{"fromNode": "subscription_repo", "toNode": "ui_layer", "label": "Data Flow"},
+		{"fromNode": "address_repo", "toNode": "ui_layer", "label": "Data Flow"},
+		{"fromNode": "sync_repo", "toNode": "ui_layer", "label": "Synchronization"},
+		{"fromNode": "network_monitor", "toNode": "sync_repo", "label": "Connectivity Status"},
+		{"fromNode": "security_layer", "toNode": "ui_layer", "label": "Authentication"}
+	]
+}

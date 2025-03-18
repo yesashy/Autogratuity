@@ -142,6 +142,22 @@ public class SyncStatus {
     }
     
     /**
+     * Check if sync is currently in progress
+     * @return true if sync is in progress
+     */
+    public boolean isInProgress() {
+        return STATUS_SYNCING.equals(status);
+    }
+
+    /**
+     * Check if sync has an error
+     * @return true if sync has an error
+     */
+    public boolean isError() {
+        return STATUS_ERROR.equals(status) || (lastError != null && !lastError.isEmpty());
+    }
+    
+    /**
      * Get a human-readable status message
      * 
      * @return A user-friendly status message

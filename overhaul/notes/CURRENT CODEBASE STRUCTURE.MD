@@ -28,10 +28,6 @@ Autogratuity\
 │   │   │   │   │       ├── ProSubscribeActivity.java
 │   │   │   │   │       ├── ShiptNotificationListenerService.java
 │   │   │   │   │       ├── WebAppActivity.java
-│   │   │   │   │       ├── adapters\
-│   │   │   │   │       │   ├── AddressesAdapter.java
-│   │   │   │   │       │   ├── DeliveriesAdapter.java
-│   │   │   │   │       │   ├── ViewPagerAdapter.java
 │   │   │   │   │       ├── data\
 │   │   │   │   │       │   ├── local\
 │   │   │   │   │       │   │   ├── AddressDao.java
@@ -47,12 +43,19 @@ Autogratuity\
 │   │   │   │   │       │   │   ├── PreferenceManager.java
 │   │   │   │   │       │   ├── model\
 │   │   │   │   │       │   │   ├── Address.java
+│   │   │   │   │       │   │   ├── Amounts.java
 │   │   │   │   │       │   │   ├── AppConfig.java
+│   │   │   │   │       │   │   ├── Coordinates.java
 │   │   │   │   │       │   │   ├── Delivery.java
 │   │   │   │   │       │   │   ├── DeliveryStats.java
+│   │   │   │   │       │   │   ├── ErrorInfo.java
+│   │   │   │   │       │   │   ├── Metadata.java
+│   │   │   │   │       │   │   ├── Reference.java
+│   │   │   │   │       │   │   ├── Status.java
 │   │   │   │   │       │   │   ├── SubscriptionStatus.java
 │   │   │   │   │       │   │   ├── SyncOperation.java
 │   │   │   │   │       │   │   ├── SyncStatus.java
+│   │   │   │   │       │   │   ├── Times.java
 │   │   │   │   │       │   │   ├── UserProfile.java
 │   │   │   │   │       │   ├── repository\
 │   │   │   │   │       │   │   ├── address\
@@ -92,14 +95,6 @@ Autogratuity\
 │   │   │   │   │       ├── dialogs\
 │   │   │   │   │       │   ├── AddDeliveryDialog.java
 │   │   │   │   │       │   ├── DeliveryDetailDialog.java
-│   │   │   │   │       ├── models\
-│   │   │   │   │       │   ├── Address.java
-│   │   │   │   │       │   ├── Coordinates.java
-│   │   │   │   │       │   ├── Delivery.java
-│   │   │   │   │       │   ├── DeliveryData.java
-│   │   │   │   │       │   ├── FirestoreModel.java
-│   │   │   │   │       │   ├── ImportVerification.java
-│   │   │   │   │       │   ├── TipData.java
 │   │   │   │   │       ├── receivers\
 │   │   │   │   │       │   ├── BootCompletedReceiver.java
 │   │   │   │   │       │   ├── CaptureProcessReceiver.java
@@ -116,7 +111,10 @@ Autogratuity\
 │   │   │   │   │       │   │   │   └── AddressesAdapter.java
 │   │   │   │   │       │   ├── common\
 │   │   │   │   │       │   │   ├── BaseViewModel.java
+│   │   │   │   │       │   │   ├── LiveDataStatCard.java
+│   │   │   │   │       │   │   ├── README_CUSTOM_VIEWS.md
 │   │   │   │   │       │   │   ├── RepositoryViewModelFactory.java
+│   │   │   │   │       │   │   ├── StatCardExtensions.java
 │   │   │   │   │       │   ├── dashboard\
 │   │   │   │   │       │   │   ├── DashboardFragment.java
 │   │   │   │   │       │   │   ├── DashboardViewModel.java
@@ -125,17 +123,25 @@ Autogratuity\
 │   │   │   │   │       │   │   ├── DeliveryViewModel.java
 │   │   │   │   │       │   │   ├── adapters\
 │   │   │   │   │       │   │   │   └── DeliveriesAdapter.java
+│   │   │   │   │       │   ├── dialog\
+│   │   │   │   │       │   │   ├── DeliveryDialogViewModel.java
+│   │   │   │   │       │   │   ├── DeliveryDialogViewModelFactory.java
+│   │   │   │   │       │   ├── faq\
+│   │   │   │   │       │   │   ├── FaqViewModel.java
 │   │   │   │   │       │   ├── import\
 │   │   │   │   │       │   │   ├── BulkUploadFragment.java
 │   │   │   │   │       │   │   ├── BulkUploadViewModel.java
-│   │   │   │   │       │   ├── importing\
+│   │   │   │   │       │   ├── login\
+│   │   │   │   │       │   │   ├── AuthViewModel.java
 │   │   │   │   │       │   ├── main\
 │   │   │   │   │       │   │   ├── MainViewModel.java
 │   │   │   │   │       │   ├── map\
 │   │   │   │   │       │   │   ├── MapFragment.java
 │   │   │   │   │       │   │   ├── MapViewModel.java
 │   │   │   │   │       │   ├── subscription\
-│   │   │   │   │       │   │   └── SubscriptionViewModel.java
+│   │   │   │   │       │   │   ├── SubscriptionViewModel.java
+│   │   │   │   │       │   ├── webapp\
+│   │   │   │   │       │   │   └── WebAppViewModel.java
 │   │   │   │   │       ├── utils\
 │   │   │   │   │       │   ├── DataValidationSystem.java
 │   │   │   │   │       │   ├── ExportManager.java
@@ -183,6 +189,7 @@ Autogratuity\
 │   │   │   │   │   ├── dialog_add_delivery.xml
 │   │   │   │   │   ├── dialog_export_data.xml
 │   │   │   │   │   ├── dialog_register.xml
+│   │   │   │   │   ├── example_livedata_statcard.xml
 │   │   │   │   │   ├── fragment_addresses.xml
 │   │   │   │   │   ├── fragment_bulk_upload.xml
 │   │   │   │   │   ├── fragment_dashboard.xml
@@ -252,37 +259,44 @@ Autogratuity\
 ├── gradlew.bat
 ├── local.properties
 ├── overhaul\
-│   ├── CODEBASE STRUCTURE DISASTER.txt
-│   ├── MASTER_NOTES.md
-│   ├── Necessary-Changes.md
-│   ├── PHASE2_IMPLEMENTATION_PLAN.md
-│   ├── UI Overhaul - Critical.md
-│   ├── deprecated_files\
-│   │   ├── Notes from ChatGPT\
-│   │   │   ├── Autogratuity Architectural Overhaul - Enhanced Master Notes.md
-│   │   │   ├── Note from ChatGPT.md
-│   │   ├── UI Overhaul - Critical.md.temp
-│   │   ├── flutter fix.md
-│   │   ├── react_native_backup\
-│   │   │   ├── components\
-│   │   │   │   ├── AdminPanel.js
-│   │   │   ├── firebase-config.js
-│   │   │   └── utils\
-│   ├── firebase_dependency_update.md
+│   ├── Untitled-1.json
 │   ├── firestore config\
 │   │   ├── new_firebase_structure.json
 │   │   ├── new_firebase_structure.jsonl
 │   │   ├── reference.json
-│   ├── flutter_cleanup_instructions.md
-│   ├── flutter_cleanup_summary.md
-│   ├── implementation_status.md
 │   ├── notes\
+│   │   ├── .obsidian\
+│   │   │   ├── app.json
+│   │   │   ├── appearance.json
+│   │   │   ├── core-plugins.json
+│   │   │   ├── graph.json
+│   │   │   ├── workspace.json
 │   │   ├── ADAPTER_MIGRATION_ANALYSIS.md
+│   │   ├── Autogratuity Architectural Flow Visualization.md
+│   │   ├── Autogratuity Architectural Flow.md
+│   │   ├── Autogratuity Build Error Fixes.md
+│   │   ├── Build Error Log.md
 │   │   ├── CODEBASE_AUDIT.md
 │   │   ├── CONSOLIDATED_CHECKLIST.md
+│   │   ├── CONSOLIDATED_CHECKLIST_V2.md
 │   │   ├── IMMEDIATE_ACTION_PLAN.md
+│   │   ├── MASTER_NOTES.md
+│   │   ├── PHASE2_IMPLEMENTATION_PLAN.md
 │   │   ├── Today.md
-│   │   └── address_viewmodel_implementation.md
+│   │   ├── UI Overhaul - Critical.md
+│   │   ├── Untitled 1.canvas
+│   │   ├── Untitled 1.md
+│   │   ├── Untitled 2.canvas
+│   │   ├── Untitled 2.md
+│   │   ├── Untitled-1 1.json
+│   │   ├── Untitled-1.json
+│   │   ├── Untitled.canvas
+│   │   ├── Untitled.md
+│   │   ├── address_viewmodel_implementation.md
+│   │   ├── build resolve checklist.md
+│   │   ├── codebase_structure.md
+│   │   ├── f\
+│   │   └── implementation_status.md
 ├── settings.gradle
 ├── src\
 │   ├── components\

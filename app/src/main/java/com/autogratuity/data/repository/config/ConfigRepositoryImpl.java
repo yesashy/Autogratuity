@@ -2,6 +2,7 @@ package com.autogratuity.data.repository.config;
 
 import android.content.Context;
 import android.util.Log;
+import androidx.annotation.NonNull;
 
 import com.autogratuity.data.model.AppConfig;
 import com.autogratuity.data.model.UserProfile;
@@ -309,7 +310,9 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                             });
                         } else {
                             // Create new device record
-                            docRef.set(deviceInfo)
+                            // Create a final copy of the deviceInfo map
+            final Map<String, Object> finalDeviceInfo = new HashMap<>(deviceInfo);
+            docRef.set(finalDeviceInfo)
                                     .addOnSuccessListener(aVoid -> {
                                         // Also update user profile with device ID
                                         addDeviceToUserProfile(deviceId)
@@ -418,5 +421,71 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                 // Prefetch app config
                 getAppConfig().ignoreElement()
         );
+    }
+
+    @Override
+    public String getConfigValue(String key, String defaultValue) {
+        try {
+            AppConfig config = getAppConfig().blockingGet();
+            if (config != null && config.getCustomData() != null && config.getCustomData().containsKey(key)) {
+                Object value = config.getCustomData().get(key);
+                return value != null ? value.toString() : defaultValue;
+            }
+            return defaultValue;
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting config value: " + key, e);
+            return defaultValue;
+        }
+    }
+    
+    @Override
+    public boolean getConfigBoolean(String key, boolean defaultValue) {
+        try {
+            AppConfig config = getAppConfig().blockingGet();
+            if (config != null && config.getCustomData() != null && config.getCustomData().containsKey(key)) {
+                Object value = config.getCustomData().get(key);
+                if (value instanceof Boolean) {
+                    return (Boolean) value;
+                } else if (value != null) {
+                    return Boolean.parseBoolean(value.toString());
+                }
+            }
+            return defaultValue;
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting config boolean: " + key, e);
+            return defaultValue;
+        }
+    }
+    
+    @Override
+    public Completable incrementCounter(String counterKey) {
+        return Completable.defer(() -> {
+            DocumentReference docRef = db.collection(COLLECTION_SYSTEM_CONFIG)
+                    .document("counters");
+            
+            return Completable.create(emitter -> {
+                docRef.update(counterKey, com.google.firebase.firestore.FieldValue.increment(1))
+                        .addOnSuccessListener(aVoid -> emitter.onComplete())
+                        .addOnFailureListener(e -> {
+                            if (e instanceof com.google.firebase.firestore.FirebaseFirestoreException &&
+                                    ((com.google.firebase.firestore.FirebaseFirestoreException) e).getCode() == 
+                                            com.google.firebase.firestore.FirebaseFirestoreException.Code.NOT_FOUND) {
+                                // Create if not exists
+                                Map<String, Object> initialData = new HashMap<>();
+                                initialData.put(counterKey, 1);
+                                docRef.set(initialData)
+                                        .addOnSuccessListener(aVoid -> emitter.onComplete())
+                                        .addOnFailureListener(emitter::onError);
+                            } else {
+                                emitter.onError(e);
+                            }
+                        });
+            });
+        });
+    }
+    
+    @Override
+    public Completable noOpCompletable() {
+        return Completable.complete();
     }
 }

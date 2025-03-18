@@ -3,6 +3,8 @@ package com.autogratuity.data.model;
 import com.google.firebase.Timestamp;
 
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Model class representing application configuration from Firestore.
@@ -17,6 +19,7 @@ public class AppConfig {
     private Maintenance maintenance;
     private Timestamp updatedAt;
     private long version;
+    private Map<String, Object> customData;
     
     // Default constructor required for Firestore
     public AppConfig() {
@@ -258,6 +261,25 @@ public class AppConfig {
         public void setEstimatedEndTime(Date estimatedEndTime) {
             this.estimatedEndTime = estimatedEndTime != null ? new Timestamp(estimatedEndTime) : null;
         }
+    }
+    
+    /**
+     * Get custom data map for additional configuration values
+     * @return Map of custom configuration data
+     */
+    public Map<String, Object> getCustomData() {
+        if (customData == null) {
+            customData = new HashMap<>();
+        }
+        return customData;
+    }
+    
+    /**
+     * Set custom data map
+     * @param customData Map of custom configuration data
+     */
+    public void setCustomData(Map<String, Object> customData) {
+        this.customData = customData;
     }
     
     // Getters and setters

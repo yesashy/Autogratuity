@@ -1,6 +1,7 @@
 package com.autogratuity.data.serialization;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.autogratuity.data.local.JsonSerializer;
 import com.autogratuity.data.model.UserProfile;
@@ -11,6 +12,8 @@ import com.google.firebase.firestore.DocumentSnapshot;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 
 /**
@@ -297,7 +300,7 @@ public class UserProfileSerializer {
     public static UserProfile createDefaultUserProfile(String userId) {
         UserProfile profile = new UserProfile();
         profile.setUserId(userId);
-        profile.setCreatedAt(new Date());
+        profile.setCreatedAt(new Timestamp(new Date()));
         profile.setAccountStatus("active");
         
         // Initialize nested objects
