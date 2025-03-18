@@ -12,7 +12,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
+// Removed import with alias - will use fully qualified name instead
 
 import java.lang.reflect.Type;
 import java.util.Date;
@@ -84,7 +84,7 @@ public class JsonSerializer {
     /**
      * Custom adapter for Firebase Timestamp to handle serialization and deserialization.
      */
-    private static class TimestampAdapter implements JsonSerializer<Timestamp>, JsonDeserializer<Timestamp> {
+    private static class TimestampAdapter implements com.google.gson.JsonSerializer<Timestamp>, JsonDeserializer<Timestamp> {
         @Override
         public JsonElement serialize(Timestamp src, Type typeOfSrc, JsonSerializationContext context) {
             JsonObject obj = new JsonObject();

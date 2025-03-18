@@ -21,6 +21,10 @@
             android:id="@+id/nav_bulk_upload"
             android:icon="@drawable/ic_upload"
             android:title="Bulk Upload" />
+        <item
+            android:id="@+id/nav_react_ui"
+            android:icon="@drawable/ic_dashboard"
+            android:title="New UI (React)" />
     </group>
 
     <item android:title="Pro Features">

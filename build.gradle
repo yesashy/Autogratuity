@@ -5,8 +5,17 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.9.0'  // Restored original version
-        classpath 'com.google.gms:google-services:4.4.0'  // Latest version
+        classpath 'com.android.tools.build:gradle:8.9.0'  // Updated to match your previous working setup
+        classpath 'com.google.gms:google-services:4.4.0'
+    }
+}
+
+// Force consistent Kotlin stdlib version across all modules
+subprojects {
+    configurations.all {
+        resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
+        resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.10'
+        resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.10'
     }
 }
 

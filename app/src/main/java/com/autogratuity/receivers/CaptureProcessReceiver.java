@@ -5,21 +5,40 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
+import com.autogratuity.data.repository.core.RepositoryProvider;
 import com.autogratuity.utils.ShiptCaptureProcessor;
+
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
 
 /**
  * Receiver for processing Shipt captures on schedule
  */
 public class CaptureProcessReceiver extends BroadcastReceiver {
     private static final String TAG = "CaptureProcessReceiver";
+    private CompositeDisposable disposables = new CompositeDisposable();
 
     @Override
     public void onReceive(Context context, Intent intent) {
         Log.d(TAG, "Received capture processing alarm");
 
-        // Process captures in a background thread
+        // Ensure repositories are initialized
+        if (!RepositoryProvider.isInitialized()) {
+            try {
+                RepositoryProvider.initialize(context);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to initialize repositories", e);
+                return;
+            }
+        }
+
+        // Process captures using ShiptCaptureProcessor but with better error handling
+        ShiptCaptureProcessor processor = new ShiptCaptureProcessor(context);
+        
+        // Using the existing callback pattern until ShiptCaptureProcessor is updated
+        // to return RxJava Single in a future task
         new Thread(() -> {
-            ShiptCaptureProcessor processor = new ShiptCaptureProcessor(context);
             processor.processCaptures(new ShiptCaptureProcessor.ProcessCallback() {
                 @Override
                 public void onComplete(int count) {

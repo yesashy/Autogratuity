@@ -1,0 +1,403 @@
+package com.autogratuity;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentTransaction;
+
+import com.autogratuity.data.model.SyncStatus;
+import com.autogratuity.data.repository.core.RepositoryProvider;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
+import com.autogratuity.data.repository.subscription.SubscriptionRepository;
+import com.autogratuity.data.repository.sync.SyncRepository;
+import com.autogratuity.fragments.AddressesFragment;
+import com.autogratuity.fragments.DashboardFragment;
+import com.autogratuity.fragments.DeliveriesFragment;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
+
+/**
+ * Main activity for the Autogratuity application.
+ * Serves as the primary UI container and navigation hub.
+ */
+public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
+
+    // Repository references
+    private SyncRepository syncRepository;
+    private DeliveryRepository deliveryRepository;
+    private SubscriptionRepository subscriptionRepository;
+
+    // UI elements
+    private ImageView syncIcon;
+    private TextView syncText;
+    private ImageButton refreshButton;
+    private TextView remainingMappingsText;
+    private MaterialButton addDeliveryButton;
+    private FloatingActionButton quickSwitchButton;
+
+    // For managing RxJava subscriptions
+    private CompositeDisposable disposables = new CompositeDisposable();
+
+    // Current fragment tracking
+    private String currentFragmentTag = "";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Set up toolbar
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayShowTitleEnabled(false);
+        }
+
+        // Initialize repositories
+        initializeRepositories();
+        
+        // Initialize UI elements
+        initializeViews();
+        
+        // Set up listeners
+        setupListeners();
+        
+        // Load default fragment
+        if (savedInstanceState == null) {
+            loadFragment(new DashboardFragment(), "dashboard");
+        }
+    }
+
+    /**
+     * Initialize repository instances from the RepositoryProvider
+     */
+    private void initializeRepositories() {
+        try {
+            syncRepository = RepositoryProvider.getSyncRepository();
+            deliveryRepository = RepositoryProvider.getDeliveryRepository();
+            subscriptionRepository = RepositoryProvider.getSubscriptionRepository();
+            
+            Log.d(TAG, "Repositories initialized successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Error initializing repositories", e);
+            Toast.makeText(this, "Error initializing app data", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Initialize UI element references
+     */
+    private void initializeViews() {
+        // Sync status elements
+        syncIcon = findViewById(R.id.sync_icon);
+        syncText = findViewById(R.id.sync_text);
+        refreshButton = findViewById(R.id.refresh_button);
+        remainingMappingsText = findViewById(R.id.remaining_mappings_text);
+        
+        // Action buttons
+        addDeliveryButton = findViewById(R.id.add_delivery_button);
+        quickSwitchButton = findViewById(R.id.quick_switch_button);
+    }
+
+    /**
+     * Set up click listeners and other event handlers
+     */
+    private void setupListeners() {
+        // Refresh button triggers sync
+        refreshButton.setOnClickListener(v -> {
+            performSync();
+        });
+        
+        // Add delivery button
+        addDeliveryButton.setOnClickListener(v -> {
+            // TODO: Replace with proper add delivery flow
+            // Could navigate to an AddDeliveryFragment or start an AddDeliveryActivity
+            Toast.makeText(this, "Add delivery functionality coming soon", Toast.LENGTH_SHORT).show();
+        });
+        
+        // Quick switch button cycles through main fragments
+        quickSwitchButton.setOnClickListener(v -> {
+            cycleMainFragments();
+        });
+    }
+    
+    /**
+     * Performs data synchronization using the SyncRepository
+     */
+    private void performSync() {
+        // Show syncing state in UI
+        syncIcon.setImageResource(R.drawable.ic_sync);
+        syncText.setText("Syncing...");
+        
+        // Call syncData() on the SyncRepository
+        disposables.add(
+            syncRepository.syncData()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    () -> {
+                        Log.d(TAG, "Sync completed successfully");
+                        syncIcon.setImageResource(R.drawable.ic_check);
+                        syncText.setText("Synced Just now");
+                        
+                        // Refresh the current fragment to show updated data
+                        refreshCurrentFragment();
+                    },
+                    error -> {
+                        Log.e(TAG, "Error during sync", error);
+                        syncIcon.setImageResource(R.drawable.ic_error);
+                        syncText.setText("Sync failed");
+                        Toast.makeText(this, "Sync failed: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                )
+        );
+    }
+    
+    /**
+     * Sets up observers for sync status
+     */
+    private void observeSyncStatus() {
+        disposables.add(
+            syncRepository.observeSyncStatus()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    this::updateSyncStatusUI,
+                    error -> Log.e(TAG, "Error observing sync status", error)
+                )
+        );
+        
+        // Also get the pending operations count
+        disposables.add(
+            syncRepository.getPendingSyncOperations()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    operations -> {
+                        int count = operations.size();
+                        remainingMappingsText.setText(count + " remaining");
+                        remainingMappingsText.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+                    },
+                    error -> Log.e(TAG, "Error getting pending operations", error)
+                )
+        );
+    }
+    
+    /**
+     * Updates the UI based on sync status
+     */
+    private void updateSyncStatusUI(SyncStatus status) {
+        if (status == null) {
+            syncIcon.setImageResource(R.drawable.ic_sync);
+            syncText.setText("Not synced");
+            return;
+        }
+        
+        // Update sync icon based on status
+        if (status.isInProgress()) {
+            syncIcon.setImageResource(R.drawable.ic_sync);
+            syncText.setText("Syncing...");
+        } else if (status.isError()) {
+            syncIcon.setImageResource(R.drawable.ic_error);
+            syncText.setText("Sync failed");
+        } else {
+            syncIcon.setImageResource(R.drawable.ic_check);
+            
+            // Format the last sync time
+            Date lastSyncTime = status.getLastSyncTime();
+            if (lastSyncTime != null) {
+                long diffMillis = System.currentTimeMillis() - lastSyncTime.getTime();
+                
+                if (diffMillis < TimeUnit.MINUTES.toMillis(1)) {
+                    syncText.setText("Synced Just now");
+                } else if (diffMillis < TimeUnit.HOURS.toMillis(1)) {
+                    long minutes = TimeUnit.MILLISECONDS.toMinutes(diffMillis);
+                    syncText.setText("Synced " + minutes + "m ago");
+                } else if (diffMillis < TimeUnit.DAYS.toMillis(1)) {
+                    long hours = TimeUnit.MILLISECONDS.toHours(diffMillis);
+                    syncText.setText("Synced " + hours + "h ago");
+                } else {
+                    SimpleDateFormat sdf = new SimpleDateFormat("MMM d", Locale.getDefault());
+                    syncText.setText("Synced " + sdf.format(lastSyncTime));
+                }
+            } else {
+                syncText.setText("Never synced");
+            }
+        }
+    }
+
+    /**
+     * Loads a fragment into the container
+     */
+    private void loadFragment(Fragment fragment, String tag) {
+        currentFragmentTag = tag;
+        
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        transaction.replace(R.id.fragment_container, fragment, tag);
+        transaction.commit();
+    }
+    
+    /**
+     * Refreshes the current fragment by replacing it with a new instance
+     */
+    private void refreshCurrentFragment() {
+        Fragment currentFragment = getSupportFragmentManager().findFragmentByTag(currentFragmentTag);
+        
+        if (currentFragment != null) {
+            FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+            
+            // Create a new instance of the same fragment type
+            Fragment newInstance;
+            
+            switch (currentFragmentTag) {
+                case "dashboard":
+                    newInstance = new DashboardFragment();
+                    break;
+                case "deliveries":
+                    newInstance = new DeliveriesFragment();
+                    break;
+                case "addresses":
+                    newInstance = new AddressesFragment();
+                    break;
+                default:
+                    return; // Unknown fragment type
+            }
+            
+            transaction.replace(R.id.fragment_container, newInstance, currentFragmentTag);
+            transaction.commit();
+        }
+    }
+    
+    /**
+     * Cycles through the main fragments
+     */
+    private void cycleMainFragments() {
+        // Determine which fragment to show next
+        Fragment nextFragment;
+        String nextTag;
+        
+        switch (currentFragmentTag) {
+            case "dashboard":
+                nextFragment = new DeliveriesFragment();
+                nextTag = "deliveries";
+                break;
+            case "deliveries":
+                nextFragment = new AddressesFragment();
+                nextTag = "addresses";
+                break;
+            case "addresses":
+            default:
+                nextFragment = new DashboardFragment();
+                nextTag = "dashboard";
+                break;
+        }
+        
+        // Load the next fragment
+        loadFragment(nextFragment, nextTag);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+        
+        // Handle menu item selections
+        if (id == R.id.action_upgrade_pro) {
+            // Launch the ProSubscribeActivity
+            disposables.add(
+                subscriptionRepository.isProUser()
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                        isPro -> {
+                            if (!isPro) {
+                                startActivity(new Intent(this, ProSubscribeActivity.class));
+                            } else {
+                                Toast.makeText(this, "You're already a Pro user!", Toast.LENGTH_SHORT).show();
+                            }
+                        },
+                        error -> {
+                            Log.e(TAG, "Error checking pro status", error);
+                            // Launch the activity anyway in case of error
+                            startActivity(new Intent(this, ProSubscribeActivity.class));
+                        }
+                    )
+            );
+            return true;
+        } else if (id == R.id.action_import_data) {
+            // Handle data import (could be implemented in a separate method)
+            Toast.makeText(this, "Import from Google Maps coming soon", Toast.LENGTH_SHORT).show();
+            return true;
+        } else if (id == R.id.action_sign_out) {
+            // Handle sign out (should clear user data and navigate to login)
+            handleSignOut();
+            return true;
+        }
+        
+        return super.onOptionsItemSelected(item);
+    }
+    
+    /**
+     * Handles user sign out
+     */
+    private void handleSignOut() {
+        // Perform sign out logic
+        Toast.makeText(this, "Signing out...", Toast.LENGTH_SHORT).show();
+        
+        // Clear user data and navigate to login screen
+        Intent loginIntent = new Intent(this, LoginActivity.class);
+        loginIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(loginIntent);
+        finish();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Start observing sync status when the activity is visible
+        observeSyncStatus();
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Clear disposables to prevent memory leaks
+        disposables.clear();
+    }
+    
+    @Override
+    protected void onDestroy() {
+        // Ensure all disposables are disposed
+        if (disposables != null && !disposables.isDisposed()) {
+            disposables.dispose();
+        }
+        super.onDestroy();
+    }
+}

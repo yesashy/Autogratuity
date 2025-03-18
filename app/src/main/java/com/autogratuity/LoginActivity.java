@@ -10,10 +10,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
 
+import com.autogratuity.ui.common.RepositoryViewModelFactory;
+import com.autogratuity.ui.login.AuthViewModel;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -21,15 +22,16 @@ public class LoginActivity extends AppCompatActivity {
     private Button loginButton;
     private TextView registerLink;
     private ProgressBar progressBar;
-    private FirebaseAuth mAuth;
+    private AuthViewModel viewModel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
-        // Initialize Firebase Auth
-        mAuth = FirebaseAuth.getInstance();
+        // Initialize ViewModel
+        RepositoryViewModelFactory factory = RepositoryViewModelFactory.fromRepositoryProvider();
+        viewModel = new ViewModelProvider(this, factory).get(AuthViewModel.class);
 
         // Initialize views
         emailInput = findViewById(R.id.email_input);
@@ -37,6 +39,9 @@ public class LoginActivity extends AppCompatActivity {
         loginButton = findViewById(R.id.login_button);
         registerLink = findViewById(R.id.register_link);
         progressBar = findViewById(R.id.login_progress);
+
+        // Set up observers
+        setupObservers();
 
         // Set up login button
         loginButton.setOnClickListener(v -> {
@@ -50,12 +55,39 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
+    private void setupObservers() {
+        // Observe loading state
+        viewModel.isLoading().observe(this, isLoading -> {
+            progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);
+        });
+
+        // Observe errors
+        viewModel.getError().observe(this, error -> {
+            if (error != null) {
+                Toast.makeText(this, "Error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Observe toast messages
+        viewModel.getToastMessage().observe(this, message -> {
+            if (message != null && !message.isEmpty()) {
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Observe authentication state
+        viewModel.isAuthenticated().observe(this, isAuthenticated -> {
+            if (isAuthenticated) {
+                startMainActivity();
+            }
+        });
+    }
+
     @Override
     public void onStart() {
         super.onStart();
         // Check if user is signed in and update UI accordingly
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser != null) {
+        if (viewModel.checkAuthenticationState()) {
             // User is already signed in, go to main activity
             startMainActivity();
         }
@@ -78,23 +110,8 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        // Show progress bar
-        progressBar.setVisibility(View.VISIBLE);
-
-        // Sign in with email and password
-        mAuth.signInWithEmailAndPassword(email, password)
-                .addOnCompleteListener(this, task -> {
-                    progressBar.setVisibility(View.GONE);
-                    if (task.isSuccessful()) {
-                        // Sign in success
-                        FirebaseUser user = mAuth.getCurrentUser();
-                        startMainActivity();
-                    } else {
-                        // If sign in fails, display a message to the user
-                        Toast.makeText(LoginActivity.this, "Authentication failed: " + task.getException().getMessage(),
-                                Toast.LENGTH_SHORT).show();
-                    }
-                });
+        // Login using ViewModel
+        viewModel.login(email, password);
     }
 
     private void showRegistrationDialog() {
@@ -124,7 +141,7 @@ public class LoginActivity extends AppCompatActivity {
                         return;
                     }
 
-                    // Register user
+                    // Register user using ViewModel
                     registerUser(email, password);
                 })
                 .setNegativeButton("Cancel", null)
@@ -132,21 +149,8 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void registerUser(String email, String password) {
-        progressBar.setVisibility(View.VISIBLE);
-
-        mAuth.createUserWithEmailAndPassword(email, password)
-                .addOnCompleteListener(this, task -> {
-                    progressBar.setVisibility(View.GONE);
-                    if (task.isSuccessful()) {
-                        // Registration successful
-                        Toast.makeText(LoginActivity.this, "Registration successful!", Toast.LENGTH_SHORT).show();
-                        startMainActivity();
-                    } else {
-                        // If registration fails, display a message to the user
-                        Toast.makeText(LoginActivity.this, "Registration failed: " + task.getException().getMessage(),
-                                Toast.LENGTH_SHORT).show();
-                    }
-                });
+        // Register user using ViewModel
+        viewModel.register(email, password);
     }
 
     private void startMainActivity() {

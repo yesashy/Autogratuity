@@ -2,316 +2,488 @@ package com.autogratuity.utils;
 
 import android.content.Context;
 import android.util.Log;
-import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-
-import com.google.android.gms.tasks.Task;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
-import com.google.firebase.firestore.QuerySnapshot;
-import com.google.firebase.Timestamp;
+import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.model.Reference;
+import com.autogratuity.data.model.Status;
+import com.autogratuity.data.model.Times;
+import com.autogratuity.data.model.Metadata;
+import com.autogratuity.data.repository.address.AddressRepository;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Date;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
 
 /**
  * Processes captured Shipt data and integrates it with main app database
+ * Updated to use domain repositories with RxJava
  */
 public class ShiptCaptureProcessor {
-    private static final String TAG = "ShiptDataProcessor";
+    private static final String TAG = "ShiptCaptureProcessor";
 
-    private FirebaseFirestore db;
-    private FirebaseAuth mAuth;
-    private Context context;
+    private final DeliveryRepository deliveryRepository;
+    private final AddressRepository addressRepository;
+    private final Context context;
+    private final CompositeDisposable disposables = new CompositeDisposable();
 
-    public ShiptCaptureProcessor(Context context) {
+    /**
+     * Create a new ShiptCaptureProcessor
+     *
+     * @param context The application context
+     * @param deliveryRepository The repository for delivery operations
+     * @param addressRepository The repository for address operations
+     */
+    public ShiptCaptureProcessor(Context context, 
+                               DeliveryRepository deliveryRepository,
+                               AddressRepository addressRepository) {
         this.context = context;
-        db = FirebaseFirestore.getInstance();
-        mAuth = FirebaseAuth.getInstance();
+        this.deliveryRepository = deliveryRepository;
+        this.addressRepository = addressRepository;
     }
 
     /**
      * Process all unprocessed captures
+     *
+     * @param callback Callback for processing results
      */
     public void processCaptures(ProcessCallback callback) {
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            if (callback != null) callback.onError(new Exception("User not logged in"));
-            return;
-        }
-
-        // Get all unprocessed captures
-        db.collection("shipt_captures")
-                .whereEqualTo("userId", currentUser.getUid())
-                .whereEqualTo("processed", false)
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    if (queryDocumentSnapshots.isEmpty()) {
-                        if (callback != null) callback.onComplete(0);
-                        return;
+        // Load unprocessed captures using a query to find captures with processed=false
+        disposables.add(
+            deliveryRepository.getAllDeliveries()
+                .map(allDeliveries -> {
+                    List<Delivery> unprocessed = new ArrayList<>();
+                    for (Delivery delivery : allDeliveries) {
+                        if (delivery.getMetadata() != null &&
+                            "shipt_capture".equals(delivery.getMetadata().getSource()) &&
+                            (delivery.getStatus() == null || !delivery.getStatus().isProcessed())) {
+                            unprocessed.add(delivery);
+                        }
                     }
+                    return unprocessed;
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    unprocessedCaptures -> {
+                        if (unprocessedCaptures.isEmpty()) {
+                            if (callback != null) callback.onComplete(0);
+                            return;
+                        }
 
-                    final int[] processedCount = {0};
-                    final int[] errorCount = {0};
-                    final int totalCount = queryDocumentSnapshots.size();
+                        final AtomicInteger processedCount = new AtomicInteger(0);
+                        final AtomicInteger errorCount = new AtomicInteger(0);
+                        final int totalCount = unprocessedCaptures.size();
 
-                    for (DocumentSnapshot document : queryDocumentSnapshots) {
-                        processSingleCapture(document, new ProcessCallback() {
-                            @Override
-                            public void onComplete(int count) {
-                                processedCount[0]++;
-                                checkCompletion();
-                            }
+                        for (Delivery capture : unprocessedCaptures) {
+                            processSingleCapture(capture, new ProcessCallback() {
+                                @Override
+                                public void onComplete(int count) {
+                                    processedCount.incrementAndGet();
+                                    checkCompletion();
+                                }
 
-                            @Override
-                            public void onError(Exception e) {
-                                errorCount[0]++;
-                                Log.e(TAG, "Error processing capture: " + document.getId(), e);
-                                checkCompletion();
-                            }
+                                @Override
+                                public void onError(Exception e) {
+                                    errorCount.incrementAndGet();
+                                    Log.e(TAG, "Error processing capture: " + 
+                                            capture.getDeliveryId(), e);
+                                    checkCompletion();
+                                }
 
-                            private void checkCompletion() {
-                                if (processedCount[0] + errorCount[0] >= totalCount) {
-                                    if (callback != null) {
-                                        callback.onComplete(processedCount[0]);
+                                private void checkCompletion() {
+                                    if (processedCount.get() + errorCount.get() >= totalCount) {
+                                        if (callback != null) {
+                                            callback.onComplete(processedCount.get());
+                                        }
                                     }
                                 }
-                            }
-                        });
+                            });
+                        }
+                    },
+                    error -> {
+                        Log.e(TAG, "Error getting captures", error);
+                        if (callback != null) callback.onError(error);
                     }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error getting captures", e);
-                    if (callback != null) callback.onError(e);
-                });
+                )
+        );
     }
 
     /**
      * Process a single capture
+     *
+     * @param capture The capture to process
+     * @param callback Callback for processing result
      */
-    private void processSingleCapture(DocumentSnapshot document, ProcessCallback callback) {
+    private void processSingleCapture(Delivery capture, ProcessCallback callback) {
         // Skip invalid captures
-        if (!document.contains("orderId")) {
-            markAsProcessed(document.getReference(), false);
-            if (callback != null) callback.onError(new Exception("Missing order ID"));
+        if (capture.getMetadata() == null || capture.getMetadata().getOrderId() == null) {
+            markAsProcessed(capture, false);
+            if (callback != null) callback.onError(
+                    new Exception("Missing order ID"));
             return;
         }
 
-        String orderId = document.getString("orderId");
+        String orderId = capture.getMetadata().getOrderId();
         String location = "";
 
         // Determine the location string to use
-        if (document.contains("address") && document.getString("address") != null) {
-            location = document.getString("address");
-        } else if (document.contains("location") && document.getString("location") != null) {
-            location = document.getString("location");
+        if (capture.getAddress() != null && capture.getAddress().getFullAddress() != null) {
+            location = capture.getAddress().getFullAddress();
+        } else if (capture.getNotes() != null && !capture.getNotes().isEmpty()) {
+            location = capture.getNotes();
         } else {
-            // Try to construct from zone and store
-            String zone = document.getString("zone");
-            String store = document.getString("store");
-
-            if (zone != null && store != null) {
-                location = store + " - " + zone;
-            } else if (zone != null) {
-                location = zone;
-            } else if (store != null) {
-                location = store;
-            }
-        }
-
-        // If we still don't have a location, mark as invalid
-        if (location.isEmpty()) {
-            markAsProcessed(document.getReference(), false);
-            if (callback != null) callback.onError(new Exception("Missing location information"));
+            // Skip capture if no location info
+            markAsProcessed(capture, false);
+            if (callback != null) callback.onError(
+                    new Exception("Missing location information"));
             return;
         }
 
         // Create or update the delivery
-        addOrUpdateDelivery(orderId, location, document.getReference(), callback);
+        addOrUpdateDelivery(orderId, location, capture, callback);
     }
 
     /**
      * Add or update a delivery in the main database
+     *
+     * @param orderId The order ID
+     * @param location The location
+     * @param sourceCapture The source capture
+     * @param callback Callback for processing result
      */
-    private void addOrUpdateDelivery(String orderId, String location, DocumentReference sourceRef, ProcessCallback callback) {
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            if (callback != null) callback.onError(new Exception("User not logged in"));
-            return;
-        }
-
-        // Check if delivery already exists
-        db.collection("deliveries")
-                .whereEqualTo("userId", currentUser.getUid())
-                .whereEqualTo("orderId", orderId)
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    if (!queryDocumentSnapshots.isEmpty()) {
-                        // Update existing delivery
-                        DocumentReference deliveryRef = queryDocumentSnapshots.getDocuments().get(0).getReference();
-
-                        Map<String, Object> updates = new HashMap<>();
-                        updates.put("lastUpdated", Timestamp.now());
-
-                        // Only update address if it might be more specific (longer)
-                        DocumentSnapshot existing = queryDocumentSnapshots.getDocuments().get(0);
-                        String existingAddress = existing.getString("address");
-
-                        if (existingAddress == null || (location.length() > existingAddress.length())) {
-                            updates.put("address", location);
+    private void addOrUpdateDelivery(String orderId, String location, 
+                                   Delivery sourceCapture, ProcessCallback callback) {
+        // Check if delivery already exists by finding one with matching order ID
+        disposables.add(
+            deliveryRepository.getAllDeliveries()
+                .map(allDeliveries -> {
+                    for (Delivery delivery : allDeliveries) {
+                        if (delivery.getMetadata() != null && 
+                            orderId.equals(delivery.getMetadata().getOrderId())) {
+                            return delivery;
                         }
-
-                        deliveryRef.update(updates)
-                                .addOnSuccessListener(aVoid -> {
-                                    markAsProcessed(sourceRef, true);
-                                    if (callback != null) callback.onComplete(1);
-                                })
-                                .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Error updating delivery", e);
-                                    if (callback != null) callback.onError(e);
-                                });
-                    } else {
-                        // Create new delivery
-                        Map<String, Object> delivery = new HashMap<>();
-                        delivery.put("orderId", orderId);
-                        delivery.put("address", location);
-                        delivery.put("deliveryDate", Timestamp.now());
-                        delivery.put("importDate", Timestamp.now());
-                        delivery.put("userId", currentUser.getUid());
-                        delivery.put("doNotDeliver", false);
-                        delivery.put("source", "auto_capture");
-
-                        db.collection("deliveries")
-                                .add(delivery)
-                                .addOnSuccessListener(documentReference -> {
-                                    updateAddress(location, orderId);
-                                    markAsProcessed(sourceRef, true);
-                                    if (callback != null) callback.onComplete(1);
-                                })
-                                .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Error adding delivery", e);
-                                    if (callback != null) callback.onError(e);
-                                });
                     }
+                    return null; // No matching delivery found
                 })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error checking for existing delivery", e);
-                    if (callback != null) callback.onError(e);
-                });
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    existingDelivery -> {
+                        if (existingDelivery != null) {
+                            // Update existing delivery
+                            updateExistingDelivery(existingDelivery, location, sourceCapture, callback);
+                        } else {
+                            // Create new delivery
+                            createNewDelivery(orderId, location, sourceCapture, callback);
+                        }
+                    },
+                    error -> {
+                        Log.e(TAG, "Error checking for existing delivery", error);
+                        if (callback != null) callback.onError(error);
+                    }
+                )
+        );
+    }
+
+    /**
+     * Update an existing delivery
+     *
+     * @param existingDelivery The existing delivery to update
+     * @param location The location string
+     * @param sourceCapture The source capture
+     * @param callback Callback for processing result
+     */
+    private void updateExistingDelivery(Delivery existingDelivery, String location, 
+                                      Delivery sourceCapture, ProcessCallback callback) {
+        // Update only if new location is more specific
+        boolean shouldUpdateAddress = false;
+        
+        if (existingDelivery.getAddress() == null || 
+            existingDelivery.getAddress().getFullAddress() == null ||
+            (location.length() > existingDelivery.getAddress().getFullAddress().length())) {
+            shouldUpdateAddress = true;
+        }
+        
+        if (shouldUpdateAddress) {
+            // Update the address with new location
+            if (existingDelivery.getAddress() == null) {
+                // Create new address if none exists
+                Address address = new Address();
+                address.setFullAddress(location);
+                address.setNormalizedAddress(addressRepository.normalizeAddress(location));
+                existingDelivery.setAddress(address);
+            } else {
+                // Update existing address
+                existingDelivery.getAddress().setFullAddress(location);
+                existingDelivery.getAddress().setNormalizedAddress(
+                        addressRepository.normalizeAddress(location));
+            }
+        }
+        
+        // Update metadata
+        if (existingDelivery.getMetadata() == null) {
+            existingDelivery.setMetadata(new Metadata());
+        }
+        existingDelivery.getMetadata().setUpdatedAt(new Date());
+        
+        // Update the delivery
+        disposables.add(
+            deliveryRepository.updateDelivery(existingDelivery)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    () -> {
+                        // Mark source capture as processed
+                        markAsProcessed(sourceCapture, true);
+                        if (callback != null) callback.onComplete(1);
+                    },
+                    error -> {
+                        Log.e(TAG, "Error updating delivery", error);
+                        if (callback != null) callback.onError(error);
+                    }
+                )
+        );
+    }
+
+    /**
+     * Create a new delivery
+     *
+     * @param orderId The order ID
+     * @param location The location string
+     * @param sourceCapture The source capture
+     * @param callback Callback for processing result
+     */
+    private void createNewDelivery(String orderId, String location, 
+                                 Delivery sourceCapture, ProcessCallback callback) {
+        // Create address
+        Address address = new Address();
+        address.setFullAddress(location);
+        address.setNormalizedAddress(addressRepository.normalizeAddress(location));
+        
+        // Create new delivery
+        Delivery delivery = new Delivery();
+        
+        // Set metadata
+        Metadata metadata = new Metadata();
+        metadata.setOrderId(orderId);
+        metadata.setCreatedAt(new Date());
+        metadata.setSource("auto_capture");
+        delivery.setMetadata(metadata);
+        
+        // Set address
+        delivery.setAddress(address);
+        
+        // Set reference (will be updated with address ID after saving)
+        Reference reference = new Reference();
+        reference.setAddressText(location);
+        delivery.setReference(reference);
+        
+        // Set times
+        Times times = new Times();
+        times.setCreatedAt(new Date());
+        times.setOrderedAt(new Date());
+        delivery.setTimes(times);
+        
+        // Set status
+        Status status = new Status();
+        status.setCompleted(false);
+        status.setTipped(false);
+        delivery.setStatus(status);
+        
+        // Save the delivery
+        disposables.add(
+            deliveryRepository.addDelivery(delivery)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    documentReference -> {
+                        // Update address
+                        updateAddress(address, orderId);
+                        
+                        // Mark source capture as processed
+                        markAsProcessed(sourceCapture, true);
+                        
+                        if (callback != null) callback.onComplete(1);
+                    },
+                    error -> {
+                        Log.e(TAG, "Error adding delivery", error);
+                        if (callback != null) callback.onError(error);
+                    }
+                )
+        );
     }
 
     /**
      * Mark a capture as processed
+     *
+     * @param capture The capture to mark as processed
+     * @param success Whether processing was successful
      */
-    private void markAsProcessed(DocumentReference reference, boolean success) {
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("processed", true);
-        updates.put("processedAt", Timestamp.now());
-        updates.put("processSuccess", success);
-
-        reference.update(updates)
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error marking capture as processed", e);
-                });
+    private void markAsProcessed(Delivery capture, boolean success) {
+        // Update status
+        if (capture.getStatus() == null) {
+            capture.setStatus(new Status());
+        }
+        capture.getStatus().setProcessed(true);
+        capture.getStatus().setProcessSuccess(success);
+        
+        // Update metadata
+        if (capture.getMetadata() == null) {
+            capture.setMetadata(new Metadata());
+        }
+        capture.getMetadata().setUpdatedAt(new Date());
+        
+        // Update the capture
+        disposables.add(
+            deliveryRepository.updateDelivery(capture)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    () -> Log.d(TAG, "Capture marked as processed: " + 
+                            capture.getDeliveryId()),
+                    error -> Log.e(TAG, "Error marking capture as processed", error)
+                )
+        );
     }
 
     /**
      * Update or create an address entry
+     *
+     * @param address The address to update or create
+     * @param orderId The order ID associated with this address
      */
-    private void updateAddress(String fullAddress, String orderId) {
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) return;
-
-        String normalizedAddress = normalizeAddress(fullAddress);
-        String userId = currentUser.getUid();
-
-        // Check if address exists
-        db.collection("addresses")
-                .whereEqualTo("userId", userId)
-                .whereArrayContains("searchTerms", normalizedAddress)
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    if (!queryDocumentSnapshots.isEmpty()) {
-                        // Address exists, update it
-                        DocumentReference addressRef = queryDocumentSnapshots.getDocuments().get(0).getReference();
-
-                        Map<String, Object> updates = new HashMap<>();
-                        updates.put("lastUpdated", Timestamp.now());
-                        updates.put("orderIds", FieldValue.arrayUnion(orderId));
-                        updates.put("deliveryCount", FieldValue.increment(1));
-
-                        addressRef.update(updates)
-                                .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Error updating address", e);
-                                });
-                    } else {
-                        // Create new address
-                        Map<String, Object> address = new HashMap<>();
-                        address.put("fullAddress", fullAddress);
-                        address.put("normalizedAddress", normalizedAddress);
-                        address.put("orderIds", new ArrayList<String>() {{ add(orderId); }});
-                        address.put("totalTips", 0.0);
-                        address.put("deliveryCount", 1);
-                        address.put("averageTip", 0.0);
-                        address.put("userId", userId);
-                        address.put("doNotDeliver", false);
-                        address.put("createdAt", Timestamp.now());
-                        address.put("searchTerms", generateSearchTerms(fullAddress));
-
-                        db.collection("addresses")
-                                .add(address)
-                                .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Error adding address", e);
-                                });
+    private void updateAddress(Address address, String orderId) {
+        String normalizedAddress = address.getNormalizedAddress();
+        
+        // Check if address exists in repository
+        disposables.add(
+            addressRepository.findAddressByNormalizedAddress(normalizedAddress)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    existingAddress -> {
+                        if (existingAddress != null) {
+                            // Address exists, update it
+                            updateExistingAddress(existingAddress, orderId);
+                        } else {
+                            // Address doesn't exist, create it
+                            createNewAddress(address, orderId);
+                        }
+                    },
+                    error -> {
+                        // Address not found, create new one
+                        createNewAddress(address, orderId);
                     }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error checking for existing address", e);
-                });
+                )
+        );
     }
 
     /**
-     * Normalize an address for better matching
+     * Update an existing address
+     *
+     * @param address The address to update
+     * @param orderId The order ID to add
      */
-    private String normalizeAddress(String address) {
-        return address.toLowerCase()
-                .replaceAll("[^a-z0-9\\s]", "")  // Remove punctuation
-                .replaceAll("\\s+", " ")        // Normalize whitespace
-                .trim();
+    private void updateExistingAddress(Address address, String orderId) {
+        // Update order IDs list
+        List<String> orderIds = address.getOrderIds();
+        if (orderIds == null) {
+            orderIds = new ArrayList<>();
+        }
+        
+        if (!orderIds.contains(orderId)) {
+            orderIds.add(orderId);
+            address.setOrderIds(orderIds);
+        }
+        
+        // Update delivery count
+        if (address.getDeliveryStats() == null) {
+            address.setDeliveryStats(new Address.DeliveryStats());
+        }
+        
+        Address.DeliveryStats stats = address.getDeliveryStats();
+        stats.setDeliveryCount(stats.getDeliveryCount() + 1);
+        stats.setLastDeliveryDate(new Date());
+        
+        // Update the address
+        disposables.add(
+            addressRepository.updateAddress(address)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    () -> Log.d(TAG, "Address updated: " + address.getAddressId()),
+                    error -> Log.e(TAG, "Error updating address", error)
+                )
+        );
     }
 
     /**
-     * Generate search terms for fuzzy matching
+     * Create a new address
+     *
+     * @param address The address to create
+     * @param orderId The order ID to add
      */
-    private List<String> generateSearchTerms(String address) {
-        List<String> terms = new ArrayList<>();
-        String normalized = normalizeAddress(address);
-
-        // Add the full normalized address
-        terms.add(normalized);
-
-        // Add individual words for partial matching
-        String[] words = normalized.split("\\s+");
-        for (String word : words) {
-            if (word.length() > 3) {  // Only add meaningful words
-                terms.add(word);
+    private void createNewAddress(Address address, String orderId) {
+        // Set up order IDs list
+        List<String> orderIds = new ArrayList<>();
+        orderIds.add(orderId);
+        address.setOrderIds(orderIds);
+        
+        // Set up delivery stats
+        Address.DeliveryStats stats = new Address.DeliveryStats();
+        stats.setDeliveryCount(1);
+        stats.setTipCount(0);
+        stats.setTotalTips(0.0);
+        stats.setAverageTip(0.0);
+        stats.setLastDeliveryDate(new Date());
+        address.setDeliveryStats(stats);
+        
+        // Set up search terms for improved searching
+        List<String> searchTerms = new ArrayList<>();
+        String[] addressParts = address.getNormalizedAddress().split("\\s+");
+        for (String part : addressParts) {
+            if (!part.isEmpty()) {
+                searchTerms.add(part);
             }
         }
+        address.setSearchTerms(searchTerms);
+        
+        // Set flags
+        Address.Flags flags = new Address.Flags();
+        flags.setDoNotDeliver(false);
+        address.setFlags(flags);
+        
+        // Set metadata
+        address.setMetadata(new Metadata());
+        address.getMetadata().setCreatedAt(new Date());
+        
+        // Save the address
+        disposables.add(
+            addressRepository.addAddress(address)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    documentReference -> Log.d(TAG, "Address added: " + 
+                            documentReference.getId()),
+                    error -> Log.e(TAG, "Error adding address", error)
+                )
+        );
+    }
 
-        // Extract house/building number if present
-        if (words.length > 0 && words[0].matches("\\d+")) {
-            terms.add(words[0]);
+    /**
+     * Clean up resources when processor is no longer needed
+     */
+    public void dispose() {
+        if (disposables != null && !disposables.isDisposed()) {
+            disposables.dispose();
         }
-
-        return terms;
     }
 
     /**

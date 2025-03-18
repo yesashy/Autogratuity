@@ -1,29 +1,35 @@
 package com.autogratuity;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Toast;
 
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.autogratuity.data.repository.core.RepositoryProvider;
+import com.autogratuity.data.security.AuthenticationManager;
+import com.autogratuity.ui.common.RepositoryViewModelFactory;
+import com.autogratuity.ui.webapp.WebAppViewModel;
 
 public class WebAppActivity extends AppCompatActivity {
     private static final String TAG = "WebAppActivity";
     private WebView webView;
-    private FirebaseAuth mAuth;
-    private FirebaseFirestore db;
+    private WebAppViewModel viewModel;
+    private AuthenticationManager authManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_webapp);
 
-        // Initialize Firebase
-        mAuth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
+        // Initialize ViewModel
+        RepositoryViewModelFactory factory = RepositoryViewModelFactory.fromRepositoryProvider();
+        viewModel = new ViewModelProvider(this, factory).get(WebAppViewModel.class);
+        
+        // Initialize AuthenticationManager
+        authManager = AuthenticationManager.getInstance(this);
 
         // Set up WebView
         webView = findViewById(R.id.webAppView);
@@ -36,32 +42,26 @@ public class WebAppActivity extends AppCompatActivity {
             // Add JavaScript interface
             webView.addJavascriptInterface(new WebAppInterface(), "Android");
 
-            // Load the web app
-            // For testing, we'll load a simple HTML page
-            String testHtml = "<!DOCTYPE html><html><head>"
-                    + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-                    + "<title>Autogratuity</title>"
-                    + "<style>"
-                    + "body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }"
-                    + "h1 { color: #6200EE; }"
-                    + ".card { background: #f9f9f9; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }"
-                    + "button { background: #6200EE; color: white; border: none; padding: 10px 15px; border-radius: 4px; margin-top: 10px; }"
-                    + "</style>"
-                    + "</head><body>"
-                    + "<h1>Autogratuity</h1>"
-                    + "<div class='card'>"
-                    + "<h2>Welcome to Autogratuity</h2>"
-                    + "<p>Your Shipt tip tracking app is running!</p>"
-                    + "<p>This is a placeholder for the full web app interface.</p>"
-                    + "<button onclick='Android.showToast(\"Button clicked!\")'>Test Android Bridge</button>"
-                    + "</div>"
-                    + "<div class='card'>"
-                    + "<h3>Notification Status</h3>"
-                    + "<p>Listening for Shipt notifications...</p>"
-                    + "</div>"
-                    + "</body></html>";
-
-            webView.loadData(testHtml, "text/html", "UTF-8");
+            // Set up observers for LiveData from ViewModel
+            viewModel.isAuthenticated().observe(this, isAuthenticated -> {
+                // Update UI based on authentication status if needed
+            });
+            
+            viewModel.getWebAppContent().observe(this, content -> {
+                if (content != null && !content.isEmpty()) {
+                    webView.loadData(content, "text/html", "UTF-8");
+                }
+            });
+            
+            viewModel.getError().observe(this, error -> {
+                if (error != null) {
+                    Toast.makeText(this, "Error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+            
+            // Load web app content from ViewModel
+            viewModel.loadUserInfo();
+            viewModel.loadWebAppContent();
         } else {
             Toast.makeText(this, "Error: WebView not found", Toast.LENGTH_SHORT).show();
             finish();
@@ -77,10 +77,15 @@ public class WebAppActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public String getUserId() {
-            if (mAuth.getCurrentUser() != null) {
-                return mAuth.getCurrentUser().getUid();
+            if (authManager.isAuthenticated()) {
+                return authManager.getCurrentUserId();
             }
             return "Not logged in";
+        }
+        
+        @JavascriptInterface
+        public void savePreference(String key, String value) {
+            viewModel.savePreference(key, value);
         }
     }
 }

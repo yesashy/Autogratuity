@@ -4,14 +4,23 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
-import com.autogratuity.repositories.FirestoreRepository;
-import com.autogratuity.repositories.IFirestoreRepository;
+import com.autogratuity.data.model.UserProfile;
+import com.autogratuity.data.repository.core.RepositoryProvider;
+import com.autogratuity.data.repository.preference.PreferenceRepository;
+import com.autogratuity.data.repository.subscription.SubscriptionRepository;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
 
 /**
  * Utility class for tracking app usage metrics
+ * Updated to use domain-specific repositories
  */
 public class UsageTracker {
     private static final String TAG = "UsageTracker";
@@ -25,13 +34,13 @@ public class UsageTracker {
     
     private final Context context;
     private final SharedPreferences prefs;
-    private final FirebaseFirestore db;
     private final FirebaseAuth mAuth;
-    private final IFirestoreRepository repository;
+    private final PreferenceRepository preferenceRepository;
+    private final SubscriptionRepository subscriptionRepository;
+    private final CompositeDisposable disposables = new CompositeDisposable();
     
     private int mappingCount = 0;
     private boolean isPro = false;
-    private SubscriptionManager subscriptionManager;
     private UsageUpdateListener listener;
     
     /**
@@ -40,18 +49,17 @@ public class UsageTracker {
     private UsageTracker(Context context) {
         this.context = context.getApplicationContext();
         this.prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        this.db = FirebaseFirestore.getInstance();
         this.mAuth = FirebaseAuth.getInstance();
-        this.repository = FirestoreRepository.getInstance();
+        
+        // Initialize repositories from RepositoryProvider
+        this.preferenceRepository = RepositoryProvider.getPreferenceRepository();
+        this.subscriptionRepository = RepositoryProvider.getSubscriptionRepository();
         
         // Load local count from SharedPreferences
         mappingCount = prefs.getInt(KEY_MAPPING_COUNT, 0);
         
-        // Get subscription manager
-        subscriptionManager = SubscriptionManager.getInstance(context);
-        
-        // Check if user is Pro
-        isPro = subscriptionManager.isProUser();
+        // Check if user is Pro using SubscriptionRepository
+        checkProStatus();
     }
     
     /**
@@ -65,6 +73,28 @@ public class UsageTracker {
     }
     
     /**
+     * Check if the user has pro status by querying the SubscriptionRepository
+     */
+    private void checkProStatus() {
+        disposables.add(
+            subscriptionRepository.isProUser()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    result -> {
+                        isPro = result;
+                        notifyListener();
+                    },
+                    error -> {
+                        Log.e(TAG, "Error checking pro status", error);
+                        isPro = false;
+                        notifyListener();
+                    }
+                )
+        );
+    }
+    
+    /**
      * Set a listener for usage updates
      */
     public void setListener(UsageUpdateListener listener) {
@@ -75,7 +105,7 @@ public class UsageTracker {
     }
     
     /**
-     * Load usage data from Firestore
+     * Load usage data from the repositories
      */
     public void loadUsageData(UsageDataCallback callback) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
@@ -86,48 +116,81 @@ public class UsageTracker {
             return;
         }
         
-        String userId = currentUser.getUid();
-        
-        // First check if the user is a Pro user
-        isPro = subscriptionManager.isProUser();
-        
-        // Get the mapping count from Firestore
-        db.collection("users")
-                .document(userId)
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if (documentSnapshot.exists() && documentSnapshot.contains("mappingCount")) {
-                        Long count = documentSnapshot.getLong("mappingCount");
-                        if (count != null) {
-                            mappingCount = count.intValue();
-                            
-                            // Update local count
-                            prefs.edit().putInt(KEY_MAPPING_COUNT, mappingCount).apply();
-                            
-                            // Notify listener
-                            notifyListener();
-                            
-                            if (callback != null) {
-                                callback.onDataLoaded(mappingCount, isPro);
-                            }
-                        }
-                    } else {
-                        // Create the user document if it doesn't exist
-                        db.collection("users")
-                                .document(userId)
-                                .set(new UsageData(mappingCount, isPro));
+        // Check pro status first
+        disposables.add(
+            subscriptionRepository.isProUser()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    proStatus -> {
+                        isPro = proStatus;
                         
+                        // Then get the user profile
+                        disposables.add(
+                            preferenceRepository.getUserProfile()
+                                .subscribeOn(Schedulers.io())
+                                .observeOn(AndroidSchedulers.mainThread())
+                                .subscribe(
+                                    profile -> {
+                                        if (profile != null && profile.getUsageStats() != null) {
+                                            mappingCount = profile.getUsageStats().getMappingCount();
+                                            
+                                            // Update local preferences
+                                            prefs.edit().putInt(KEY_MAPPING_COUNT, mappingCount).apply();
+                                            
+                                            // Notify listener
+                                            notifyListener();
+                                            
+                                            if (callback != null) {
+                                                callback.onDataLoaded(mappingCount, isPro);
+                                            }
+                                        } else {
+                                            // Create user profile with default values if it doesn't exist
+                                            UserProfile newProfile = new UserProfile();
+                                            
+                                            // Create usage stats
+                                            UserProfile.UsageStats usageStats = new UserProfile.UsageStats();
+                                            usageStats.setMappingCount(mappingCount);
+                                            newProfile.setUsageStats(usageStats);
+                                            
+                                            // Update preferences
+                                            disposables.add(
+                                                preferenceRepository.updateUserProfile(newProfile)
+                                                    .subscribeOn(Schedulers.io())
+                                                    .observeOn(AndroidSchedulers.mainThread())
+                                                    .subscribe(
+                                                        () -> {
+                                                            if (callback != null) {
+                                                                callback.onDataLoaded(mappingCount, isPro);
+                                                            }
+                                                        },
+                                                        error -> {
+                                                            Log.e(TAG, "Error creating profile", error);
+                                                            if (callback != null) {
+                                                                callback.onError(error);
+                                                            }
+                                                        }
+                                                    )
+                                            );
+                                        }
+                                    },
+                                    error -> {
+                                        Log.e(TAG, "Error loading user profile", error);
+                                        if (callback != null) {
+                                            callback.onError(error);
+                                        }
+                                    }
+                                )
+                        );
+                    },
+                    error -> {
+                        Log.e(TAG, "Error checking pro status", error);
                         if (callback != null) {
-                            callback.onDataLoaded(mappingCount, isPro);
+                            callback.onError(error);
                         }
                     }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error loading usage data", e);
-                    if (callback != null) {
-                        callback.onError(e);
-                    }
-                });
+                )
+        );
     }
     
     /**
@@ -145,18 +208,40 @@ public class UsageTracker {
         // Update SharedPreferences
         prefs.edit().putInt(KEY_MAPPING_COUNT, mappingCount).apply();
         
-        // Update Firestore
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser != null) {
-            String userId = currentUser.getUid();
-            db.collection("users")
-                    .document(userId)
-                    .update("mappingCount", mappingCount)
-                    .addOnFailureListener(e -> Log.e(TAG, "Error updating mapping count", e));
-        }
-        
-        // Notify listener
-        notifyListener();
+        // Update user profile in repository
+        disposables.add(
+            preferenceRepository.getUserProfile()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    profile -> {
+                        if (profile != null) {
+                            // Update usage stats
+                            UserProfile.UsageStats usageStats = profile.getUsageStats();
+                            if (usageStats == null) {
+                                usageStats = new UserProfile.UsageStats();
+                            }
+                            usageStats.setMappingCount(mappingCount);
+                            profile.setUsageStats(usageStats);
+                            
+                            // Update profile
+                            disposables.add(
+                                preferenceRepository.updateUserProfile(profile)
+                                    .subscribeOn(Schedulers.io())
+                                    .observeOn(AndroidSchedulers.mainThread())
+                                    .subscribe(
+                                        () -> {
+                                            Log.d(TAG, "Mapping count updated successfully");
+                                            notifyListener();
+                                        },
+                                        error -> Log.e(TAG, "Error updating mapping count", error)
+                                    )
+                            );
+                        }
+                    },
+                    error -> Log.e(TAG, "Error getting user profile", error)
+                )
+        );
     }
     
     /**
@@ -168,18 +253,40 @@ public class UsageTracker {
         // Update SharedPreferences
         prefs.edit().putInt(KEY_MAPPING_COUNT, mappingCount).apply();
         
-        // Update Firestore
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser != null) {
-            String userId = currentUser.getUid();
-            db.collection("users")
-                    .document(userId)
-                    .update("mappingCount", mappingCount)
-                    .addOnFailureListener(e -> Log.e(TAG, "Error resetting mapping count", e));
-        }
-        
-        // Notify listener
-        notifyListener();
+        // Update user profile in repository
+        disposables.add(
+            preferenceRepository.getUserProfile()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    profile -> {
+                        if (profile != null) {
+                            // Update usage stats
+                            UserProfile.UsageStats usageStats = profile.getUsageStats();
+                            if (usageStats == null) {
+                                usageStats = new UserProfile.UsageStats();
+                            }
+                            usageStats.setMappingCount(0);
+                            profile.setUsageStats(usageStats);
+                            
+                            // Update profile
+                            disposables.add(
+                                preferenceRepository.updateUserProfile(profile)
+                                    .subscribeOn(Schedulers.io())
+                                    .observeOn(AndroidSchedulers.mainThread())
+                                    .subscribe(
+                                        () -> {
+                                            Log.d(TAG, "Mapping count reset successfully");
+                                            notifyListener();
+                                        },
+                                        error -> Log.e(TAG, "Error resetting mapping count", error)
+                                    )
+                            );
+                        }
+                    },
+                    error -> Log.e(TAG, "Error getting user profile", error)
+                )
+        );
     }
     
     /**
@@ -219,18 +326,25 @@ public class UsageTracker {
     public void setProStatus(boolean isPro) {
         this.isPro = isPro;
         
-        // Update Firestore
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser != null) {
-            String userId = currentUser.getUid();
-            db.collection("users")
-                    .document(userId)
-                    .update("isPro", isPro)
-                    .addOnFailureListener(e -> Log.e(TAG, "Error updating Pro status", e));
-        }
+        // Create map with subscription data
+        Map<String, Object> subscriptionRecord = new HashMap<>();
+        subscriptionRecord.put("isPro", isPro);
+        subscriptionRecord.put("timestamp", System.currentTimeMillis());
+        subscriptionRecord.put("source", "manual_update");
         
-        // Notify listener
-        notifyListener();
+        // Add subscription record to repository
+        disposables.add(
+            subscriptionRepository.addSubscriptionRecord(subscriptionRecord)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    ref -> {
+                        Log.d(TAG, "Pro status updated successfully");
+                        notifyListener();
+                    },
+                    error -> Log.e(TAG, "Error updating Pro status", error)
+                )
+        );
     }
     
     /**
@@ -243,23 +357,11 @@ public class UsageTracker {
     }
     
     /**
-     * Data class for storing usage information
+     * Clean up resources when no longer needed
      */
-    private static class UsageData {
-        private final int mappingCount;
-        private final boolean isPro;
-        
-        public UsageData(int mappingCount, boolean isPro) {
-            this.mappingCount = mappingCount;
-            this.isPro = isPro;
-        }
-        
-        public int getMappingCount() {
-            return mappingCount;
-        }
-        
-        public boolean isPro() {
-            return isPro;
+    public void dispose() {
+        if (disposables != null && !disposables.isDisposed()) {
+            disposables.dispose();
         }
     }
     

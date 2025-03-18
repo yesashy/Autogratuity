@@ -5,17 +5,17 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.drawable.DrawableCompat;
 
-import com.autogratuity.models.Address;
-import com.autogratuity.models.Coordinates;
-import com.autogratuity.models.DeliveryData;
-import com.autogratuity.models.TipData;
-import com.autogratuity.repositories.IFirestoreRepository;
+import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.repository.address.AddressRepository;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.BitmapDescriptor;
@@ -24,16 +24,21 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.firebase.firestore.GeoPoint;
 
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
 
 /**
  * Manager class for handling map operations and marker display
- * Ensures markers are properly displayed on the map after imports
+ * Refactored to use domain repositories with RxJava.
  */
 public class MapManager {
     private static final String TAG = "MapManager";
@@ -42,12 +47,15 @@ public class MapManager {
     private final GoogleMap googleMap;
     private final Context context;
     
-    // Repository for data access
-    private final IFirestoreRepository repository;
+    // Repositories for data access
+    private final AddressRepository addressRepository;
+    private final DeliveryRepository deliveryRepository;
+    private final CompositeDisposable disposables = new CompositeDisposable();
     
     // Marker tracking
     private final Map<String, Marker> markerMap = new HashMap<>();
     private boolean markersVisible = true;
+    private boolean isLoading = false;
     
     // Constants for map display
     private static final float DEFAULT_ZOOM = 14.0f;
@@ -56,17 +64,24 @@ public class MapManager {
     private static final int LOW_TIP_MARKER_COLOR = 0xFFFF0000; // Red
     private static final int DO_NOT_DELIVER_COLOR = 0xFF000000; // Black
     
+    // Currency formatter
+    private final NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.US);
+    
     /**
      * Create a new MapManager
      *
      * @param context The application context
      * @param googleMap The GoogleMap object
-     * @param repository The repository for data access
+     * @param addressRepository The address repository for data access
+     * @param deliveryRepository The delivery repository for data access
      */
-    public MapManager(Context context, GoogleMap googleMap, IFirestoreRepository repository) {
+    public MapManager(Context context, GoogleMap googleMap, 
+                    AddressRepository addressRepository, 
+                    DeliveryRepository deliveryRepository) {
         this.context = context;
         this.googleMap = googleMap;
-        this.repository = repository;
+        this.addressRepository = addressRepository;
+        this.deliveryRepository = deliveryRepository;
         
         if (googleMap != null) {
             setupMap();
@@ -111,6 +126,13 @@ public class MapManager {
             return null;
         }
         
+        // Safety check for valid coordinates
+        if (Double.isNaN(latitude) || Double.isNaN(longitude) ||
+            Double.isInfinite(latitude) || Double.isInfinite(longitude)) {
+            Log.w(TAG, "Invalid coordinates for marker: " + id);
+            return null;
+        }
+        
         // Remove existing marker with same ID if present
         if (markerMap.containsKey(id)) {
             markerMap.get(id).remove();
@@ -119,8 +141,8 @@ public class MapManager {
         // Create new marker
         MarkerOptions options = new MarkerOptions()
                 .position(new LatLng(latitude, longitude))
-                .title(title)
-                .snippet(snippet)
+                .title(title != null ? title : "Unknown")
+                .snippet(snippet != null ? snippet : "")
                 .icon(getMarkerIcon(color));
         
         Marker marker = googleMap.addMarker(options);
@@ -215,170 +237,279 @@ public class MapManager {
      * @param limit Maximum number of addresses to load
      */
     public void loadAddressMarkers(int limit) {
+        // Prevent multiple simultaneous loading operations
+        if (isLoading) {
+            Log.w(TAG, "Already loading data, ignoring request");
+            return;
+        }
+        
+        isLoading = true;
         clearMarkers();
         
-        // Load addresses from repository
-        repository.getAddressesWithMultipleDeliveries(1)
-                .addOnSuccessListener(querySnapshot -> {
-                    List<LatLng> points = new ArrayList<>();
-                    
-                    // Process each address
-                    for (int i = 0; i < querySnapshot.size() && i < limit; i++) {
-                        Address address = Address.fromDocument(querySnapshot.getDocuments().get(i));
-                        if (address == null) continue;
+        // Show loading toast
+        Toast.makeText(context, "Loading addresses...", Toast.LENGTH_SHORT).show();
+        
+        // Load addresses using AddressRepository with RxJava
+        disposables.add(
+            addressRepository.getAddresses()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doFinally(() -> isLoading = false)
+                .subscribe(
+                    addresses -> {
+                        List<LatLng> points = new ArrayList<>();
                         
-                        GeoPoint geoPoint = address.getGeoPoint();
-                        if (geoPoint == null) continue;
-                        
-                        double latitude = geoPoint.getLatitude();
-                        double longitude = geoPoint.getLongitude();
-                        
-                        // Skip invalid coordinates
-                        if (latitude == 0 && longitude == 0) continue;
-                        
-                        points.add(new LatLng(latitude, longitude));
-                        
-                        // Determine marker color based on address properties
-                        int markerColor = DEFAULT_MARKER_COLOR;
-                        if (address.isDoNotDeliver()) {
-                            markerColor = DO_NOT_DELIVER_COLOR;
-                        } else if (address.getAverageTip() > 0) {
-                            markerColor = address.getAverageTip() > 5.0 ? 
-                                    TIPPED_MARKER_COLOR : LOW_TIP_MARKER_COLOR;
+                        if (addresses.isEmpty()) {
+                            Toast.makeText(context, "No addresses found", Toast.LENGTH_SHORT).show();
+                            return;
                         }
                         
-                        String title = address.getFullAddress();
-                        String snippet = String.format("Avg Tip: $%.2f (%d deliveries)",
-                                address.getAverageTip(), address.getDeliveryCount());
-                        
-                        addMarker(address.getId(), latitude, longitude, title, snippet, markerColor);
-                    }
-                    
-                    // Move camera to show all markers
-                    if (!points.isEmpty()) {
-                        zoomToFitMarkers(points);
-                    }
-                })
-                .addOnFailureListener(e -> Log.e(TAG, "Error loading addresses: " + e.getMessage()));
-    }
-    
-    /**
-     * Load and display markers for recent imports
-     */
-    public void loadRecentImportMarkers() {
-        clearMarkers();
-        
-        // Load recent deliveries from repository
-        repository.getRecentDeliveries(50)
-                .addOnSuccessListener(querySnapshot -> {
-                    List<LatLng> points = new ArrayList<>();
-                    
-                    for (int i = 0; i < querySnapshot.size(); i++) {
-                        try {
-                            // Convert to Delivery or DeliveryData based on your model
-                            // This is just an example
-                            Map<String, Object> data = querySnapshot.getDocuments().get(i).getData();
-                            if (data == null) continue;
+                        // Process each address (limit to specified count)
+                        int count = Math.min(addresses.size(), limit);
+                        for (int i = 0; i < count; i++) {
+                            Address address = addresses.get(i);
                             
-                            // Extract location data
-                            Map<String, Object> addressData = (Map<String, Object>) data.get("address");
-                            if (addressData == null) continue;
+                            // Skip addresses without location
+                            if (address.getLocation() == null) continue;
                             
-                            Object geoPointObj = addressData.get("geoPoint");
-                            double latitude = 0;
-                            double longitude = 0;
-                            
-                            if (geoPointObj instanceof Map) {
-                                Map<String, Object> geoPointMap = (Map<String, Object>) geoPointObj;
-                                if (geoPointMap.containsKey("latitude") && geoPointMap.containsKey("longitude")) {
-                                    latitude = ((Number) geoPointMap.get("latitude")).doubleValue();
-                                    longitude = ((Number) geoPointMap.get("longitude")).doubleValue();
-                                }
-                            } else if (geoPointObj instanceof GeoPoint) {
-                                GeoPoint geoPoint = (GeoPoint) geoPointObj;
-                                latitude = geoPoint.getLatitude();
-                                longitude = geoPoint.getLongitude();
-                            } else if (addressData.containsKey("coordinates")) {
-                                String coordsStr = (String) addressData.get("coordinates");
-                                if (coordsStr != null && coordsStr.contains(",")) {
-                                    String[] parts = coordsStr.split(",");
-                                    latitude = Double.parseDouble(parts[0]);
-                                    longitude = Double.parseDouble(parts[1]);
-                                }
-                            }
+                            double latitude = address.getLocation().getLatitude();
+                            double longitude = address.getLocation().getLongitude();
                             
                             // Skip invalid coordinates
                             if (latitude == 0 && longitude == 0) continue;
                             
                             points.add(new LatLng(latitude, longitude));
                             
-                            // Determine marker properties
-                            String title = addressData.containsKey("fullAddress") ? 
-                                    (String) addressData.get("fullAddress") : "Unnamed Location";
+                            // Determine marker color based on address properties
+                            int markerColor = DEFAULT_MARKER_COLOR;
                             
-                            String snippet = data.containsKey("importDate") ? 
-                                    "Imported: " + data.get("importDate").toString() : "";
+                            // Check for do not deliver flag
+                            if (address.getFlags() != null && address.getFlags().isDoNotDeliver()) {
+                                markerColor = DO_NOT_DELIVER_COLOR;
+                            } 
+                            // Check for tip data
+                            else if (address.getDeliveryStats() != null) {
+                                double avgTip = address.getDeliveryStats().getAverageTip();
+                                if (avgTip > 0) {
+                                    markerColor = avgTip > 5.0 ? TIPPED_MARKER_COLOR : LOW_TIP_MARKER_COLOR;
+                                }
+                            }
                             
-                            addMarker("recent_" + i, latitude, longitude, title, snippet, DEFAULT_MARKER_COLOR);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error processing delivery: " + e.getMessage());
+                            // Get title and snippet
+                            String title = address.getFullAddress();
+                            String snippet = "";
+                            
+                            // Add delivery stats if available
+                            if (address.getDeliveryStats() != null) {
+                                Address.DeliveryStats stats = address.getDeliveryStats();
+                                snippet = String.format("Avg Tip: %s (%d deliveries)",
+                                        currencyFormat.format(stats.getAverageTip()), 
+                                        stats.getDeliveryCount());
+                            }
+                            
+                            addMarker(address.getAddressId(), latitude, longitude, title, snippet, markerColor);
                         }
+                        
+                        // Move camera to show all markers
+                        if (!points.isEmpty()) {
+                            zoomToFitMarkers(points);
+                            Toast.makeText(context, count + " addresses loaded", Toast.LENGTH_SHORT).show();
+                        }
+                    },
+                    error -> {
+                        Log.e(TAG, "Error loading addresses: " + error.getMessage(), error);
+                        Toast.makeText(context, "Error loading addresses", Toast.LENGTH_SHORT).show();
                     }
-                    
-                    // Move camera to show all markers
-                    if (!points.isEmpty()) {
-                        zoomToFitMarkers(points);
-                    }
-                })
-                .addOnFailureListener(e -> Log.e(TAG, "Error loading recent deliveries: " + e.getMessage()));
+                )
+        );
     }
     
     /**
-     * Display markers for a list of DeliveryData objects
+     * Load and display markers for recent deliveries
+     */
+    public void loadRecentImportMarkers() {
+        // Prevent multiple simultaneous loading operations
+        if (isLoading) {
+            Log.w(TAG, "Already loading data, ignoring request");
+            return;
+        }
+        
+        isLoading = true;
+        clearMarkers();
+        
+        // Show loading toast
+        Toast.makeText(context, "Loading recent deliveries...", Toast.LENGTH_SHORT).show();
+        
+        // Load recent deliveries using DeliveryRepository with RxJava
+        disposables.add(
+            deliveryRepository.getRecentDeliveries(50)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doFinally(() -> isLoading = false)
+                .subscribe(
+                    deliveries -> {
+                        List<LatLng> points = new ArrayList<>();
+                        int validMarkers = 0;
+                        
+                        if (deliveries.isEmpty()) {
+                            Toast.makeText(context, "No recent deliveries found", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        
+                        for (int i = 0; i < deliveries.size(); i++) {
+                            try {
+                                Delivery delivery = deliveries.get(i);
+                                
+                                // Skip deliveries without address
+                                if (delivery.getAddress() == null) continue;
+                                
+                                // Get coordinates from address
+                                double latitude = 0;
+                                double longitude = 0;
+                                
+                                // Try to get coordinates
+                                try {
+                                    latitude = delivery.getAddress().getLatitude();
+                                    longitude = delivery.getAddress().getLongitude();
+                                } catch (Exception e) {
+                                    // If we can't get coordinates, skip this delivery
+                                    Log.w(TAG, "Error getting delivery coordinates: " + e.getMessage());
+                                    continue;
+                                }
+                                
+                                // Skip invalid coordinates
+                                if (latitude == 0 && longitude == 0) continue;
+                                
+                                points.add(new LatLng(latitude, longitude));
+                                validMarkers++;
+                                
+                                // Set marker properties
+                                String title = delivery.getAddress().getFullAddress();
+                                if (title == null || title.isEmpty()) {
+                                    title = "Unnamed Location";
+                                }
+                                
+                                String snippet = "";
+                                
+                                // Get creation/delivery date if available
+                                if (delivery.getTimes() != null && delivery.getTimes().getCompletedAt() != null) {
+                                    snippet = "Delivered: " + delivery.getTimes().getCompletedAt().toString();
+                                } else if (delivery.getMetadata() != null && delivery.getMetadata().getCreatedAt() != null) {
+                                    snippet = "Created: " + delivery.getMetadata().getCreatedAt().toString();
+                                }
+                                
+                                // Add tip amount if available
+                                if (delivery.getAmounts() != null && delivery.getAmounts().getTipAmount() > 0) {
+                                    if (!snippet.isEmpty()) {
+                                        snippet += " | ";
+                                    }
+                                    snippet += "Tip: " + currencyFormat.format(delivery.getAmounts().getTipAmount());
+                                }
+                                
+                                // Determine marker color based on tip
+                                int markerColor = DEFAULT_MARKER_COLOR;
+                                if (delivery.getStatus() != null && delivery.getStatus().isTipped() &&
+                                        delivery.getAmounts() != null && delivery.getAmounts().getTipAmount() > 0) {
+                                    markerColor = TIPPED_MARKER_COLOR;
+                                }
+                                
+                                addMarker("delivery_" + delivery.getDeliveryId(), 
+                                        latitude, longitude, title, snippet, markerColor);
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error processing delivery: " + e.getMessage(), e);
+                            }
+                        }
+                        
+                        // Move camera to show all markers
+                        if (!points.isEmpty()) {
+                            zoomToFitMarkers(points);
+                            Toast.makeText(context, validMarkers + " deliveries loaded", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(context, "No valid delivery locations found", Toast.LENGTH_SHORT).show();
+                        }
+                    },
+                    error -> {
+                        Log.e(TAG, "Error loading recent deliveries: " + error.getMessage(), error);
+                        Toast.makeText(context, "Error loading deliveries", Toast.LENGTH_SHORT).show();
+                    }
+                )
+        );
+    }
+    
+    /**
+     * Display markers for a list of Delivery objects
      * Used after bulk imports
      *
-     * @param deliveries List of DeliveryData objects to display
+     * @param deliveries List of Delivery objects to display
      */
-    public void displayDeliveryMarkers(List<DeliveryData> deliveries) {
+    public void displayDeliveryMarkers(List<Delivery> deliveries) {
         if (deliveries == null || deliveries.isEmpty()) {
+            Toast.makeText(context, "No deliveries to display", Toast.LENGTH_SHORT).show();
             return;
         }
         
         clearMarkers();
         List<LatLng> points = new ArrayList<>();
+        int validMarkers = 0;
         
         for (int i = 0; i < deliveries.size(); i++) {
-            DeliveryData delivery = deliveries.get(i);
-            Address address = delivery.getAddress();
-            if (address == null) continue;
-            
-            Coordinates coordinates = address.getCoordinates();
-            if (coordinates == null) continue;
-            
-            double latitude = coordinates.getLatitude();
-            double longitude = coordinates.getLongitude();
-            
-            // Skip invalid coordinates
-            if (latitude == 0 && longitude == 0) continue;
-            
-            points.add(new LatLng(latitude, longitude));
-            
-            // Determine marker properties
-            String title = address.getFullAddress();
-            TipData tipData = delivery.getTipData();
-            
-            String snippet = tipData != null && tipData.getAmount() > 0 ? 
-                    String.format("Tip: $%.2f", tipData.getAmount()) : "No tip data";
-            
-            int markerColor = tipData != null && tipData.getAmount() > 0 ? 
-                    TIPPED_MARKER_COLOR : DEFAULT_MARKER_COLOR;
-            
-            addMarker("import_" + i, latitude, longitude, title, snippet, markerColor);
+            try {
+                Delivery delivery = deliveries.get(i);
+                
+                // Skip deliveries without address
+                if (delivery.getAddress() == null) continue;
+                
+                // Get coordinates from address
+                double latitude = 0;
+                double longitude = 0;
+                
+                // Try to get coordinates
+                try {
+                    latitude = delivery.getAddress().getLatitude();
+                    longitude = delivery.getAddress().getLongitude();
+                } catch (Exception e) {
+                    // If we can't get coordinates, skip this delivery
+                    continue;
+                }
+                
+                // Skip invalid coordinates
+                if (latitude == 0 && longitude == 0) continue;
+                
+                points.add(new LatLng(latitude, longitude));
+                validMarkers++;
+                
+                // Determine marker properties
+                String title = delivery.getAddress().getFullAddress();
+                if (title == null || title.isEmpty()) {
+                    title = "Unnamed Location";
+                }
+                
+                String snippet = "";
+                if (delivery.getAmounts() != null && delivery.getAmounts().getTipAmount() > 0) {
+                    snippet = "Tip: " + currencyFormat.format(delivery.getAmounts().getTipAmount());
+                } else {
+                    snippet = "No tip data";
+                }
+                
+                // Determine marker color
+                int markerColor = DEFAULT_MARKER_COLOR;
+                if (delivery.getStatus() != null && delivery.getStatus().isTipped() &&
+                        delivery.getAmounts() != null && delivery.getAmounts().getTipAmount() > 0) {
+                    markerColor = TIPPED_MARKER_COLOR;
+                }
+                
+                addMarker("import_" + i, latitude, longitude, title, snippet, markerColor);
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing delivery for display: " + e.getMessage(), e);
+            }
         }
         
         // Move camera to show all markers
         if (!points.isEmpty()) {
             zoomToFitMarkers(points);
+            Toast.makeText(context, validMarkers + " deliveries displayed", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(context, "No valid delivery locations to display", Toast.LENGTH_SHORT).show();
         }
     }
     
@@ -412,5 +543,18 @@ public class MapManager {
     public void moveCamera(double latitude, double longitude, float zoom) {
         googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(
                 new LatLng(latitude, longitude), zoom));
+    }
+    
+    /**
+     * Clean up resources when manager is no longer needed
+     */
+    public void dispose() {
+        // Clear all RxJava subscriptions
+        if (disposables != null && !disposables.isDisposed()) {
+            disposables.dispose();
+        }
+        
+        // Clear markers
+        clearMarkers();
     }
 }

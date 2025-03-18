@@ -8,8 +8,16 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.os.Bundle;
 
-import com.autogratuity.repositories.IFirestoreRepository;
-import com.autogratuity.repositories.FirestoreRepository;
+import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.repository.core.RepositoryProvider;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
+import com.autogratuity.data.repository.preference.PreferenceRepository;
+
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
+import io.reactivex.Single;
+import io.reactivex.Completable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,12 +60,32 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
 
     // Compiled patterns cache
     private final Map<String, Pattern> compiledPatterns = new HashMap<>();
-    private IFirestoreRepository repository;
+    private DeliveryRepository deliveryRepository;
+    private PreferenceRepository preferenceRepository;
+    private CompositeDisposable disposables;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        repository = FirestoreRepository.getInstance();
+        
+        // Initialize repositories
+        if (RepositoryProvider.isInitialized()) {
+            deliveryRepository = RepositoryProvider.getDeliveryRepository();
+            preferenceRepository = RepositoryProvider.getPreferenceRepository();
+        } else {
+            Log.e(TAG, "RepositoryProvider not initialized, service may not function correctly");
+            // Initialize RepositoryProvider if possible, otherwise service will be limited
+            try {
+                RepositoryProvider.initialize(getApplicationContext());
+                deliveryRepository = RepositoryProvider.getDeliveryRepository();
+                preferenceRepository = RepositoryProvider.getPreferenceRepository();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to initialize repositories", e);
+            }
+        }
+        
+        // Initialize CompositeDisposable
+        disposables = new CompositeDisposable();
 
         // Load any saved custom patterns
         loadCustomPatterns();
@@ -66,24 +94,68 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
     }
 
     private void loadCustomPatterns() {
-        // Load saved patterns from SharedPreferences
-        SharedPreferences prefs = getSharedPreferences("notification_patterns", MODE_PRIVATE);
-        String savedPackages = prefs.getString("shipt_packages", null);
-        String savedTipPatterns = prefs.getString("tip_patterns", null);
-        String savedOrderPatterns = prefs.getString("order_patterns", null);
+        if (preferenceRepository != null) {
+            // Load saved patterns using PreferenceRepository
+            disposables.add(
+                preferenceRepository.getPreferenceSetting("shipt_packages", "")
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(savedPackages -> {
+                        if (savedPackages != null && !savedPackages.isEmpty()) {
+                            shiptPackages = savedPackages.split(",");
+                        }
+                    }, throwable -> {
+                        Log.e(TAG, "Error loading shipt packages", throwable);
+                    })
+            );
+            
+            disposables.add(
+                preferenceRepository.getPreferenceSetting("tip_patterns", "")
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(savedTipPatterns -> {
+                        if (savedTipPatterns != null && !savedTipPatterns.isEmpty()) {
+                            tipPatterns = savedTipPatterns.split("\\|\\|");
+                            compiledPatterns.clear();
+                        }
+                    }, throwable -> {
+                        Log.e(TAG, "Error loading tip patterns", throwable);
+                    })
+            );
+            
+            disposables.add(
+                preferenceRepository.getPreferenceSetting("order_patterns", "")
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(savedOrderPatterns -> {
+                        if (savedOrderPatterns != null && !savedOrderPatterns.isEmpty()) {
+                            orderIdPatterns = savedOrderPatterns.split("\\|\\|");
+                            compiledPatterns.clear();
+                        }
+                    }, throwable -> {
+                        Log.e(TAG, "Error loading order patterns", throwable);
+                    })
+            );
+        } else {
+            // Fallback to SharedPreferences if repository is not available
+            SharedPreferences prefs = getSharedPreferences("notification_patterns", MODE_PRIVATE);
+            String savedPackages = prefs.getString("shipt_packages", null);
+            String savedTipPatterns = prefs.getString("tip_patterns", null);
+            String savedOrderPatterns = prefs.getString("order_patterns", null);
 
-        if (savedPackages != null && !savedPackages.isEmpty()) {
-            shiptPackages = savedPackages.split(",");
-        }
+            if (savedPackages != null && !savedPackages.isEmpty()) {
+                shiptPackages = savedPackages.split(",");
+            }
 
-        if (savedTipPatterns != null && !savedTipPatterns.isEmpty()) {
-            tipPatterns = savedTipPatterns.split("\\|\\|");
-            compiledPatterns.clear();
-        }
+            if (savedTipPatterns != null && !savedTipPatterns.isEmpty()) {
+                tipPatterns = savedTipPatterns.split("\\|\\|");
+                compiledPatterns.clear();
+            }
 
-        if (savedOrderPatterns != null && !savedOrderPatterns.isEmpty()) {
-            orderIdPatterns = savedOrderPatterns.split("\\|\\|");
-            compiledPatterns.clear();
+            if (savedOrderPatterns != null && !savedOrderPatterns.isEmpty()) {
+                orderIdPatterns = savedOrderPatterns.split("\\|\\|");
+                compiledPatterns.clear();
+            }
         }
     }
 
@@ -211,35 +283,72 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
         return data;
     }
 
-    private Pattern getCompiledPattern(String patternStr) {
+        private Pattern getCompiledPattern(String patternStr) {
         if (!compiledPatterns.containsKey(patternStr)) {
             compiledPatterns.put(patternStr, Pattern.compile(patternStr));
         }
         return compiledPatterns.get(patternStr);
     }
+    
+    @Override
+    public void onDestroy() {
+        // Dispose of all subscriptions to prevent memory leaks
+        if (disposables != null && !disposables.isDisposed()) {
+            disposables.dispose();
+        }
+        
+        super.onDestroy();
+    }
 
     private void saveNotificationForAnalysis(String packageName, String title, String text) {
-        // Save notification content to SharedPreferences for later analysis
-        SharedPreferences prefs = getSharedPreferences("notification_analysis", MODE_PRIVATE);
-        SharedPreferences.Editor editor = prefs.edit();
-
-        // Create unique key based on timestamp
-        String key = "notification_" + System.currentTimeMillis();
-
-        editor.putString(key + "_package", packageName);
-        editor.putString(key + "_title", title);
-        editor.putString(key + "_text", text);
-        editor.apply();
-
-        // Limit number of stored notifications to 50
-        int count = prefs.getInt("notification_count", 0);
-        if (count > 50) {
-            // Remove oldest notifications - simplified implementation
-            editor.putInt("notification_count", 1);
-            editor.apply();
+        if (preferenceRepository != null) {
+            // Create unique key based on timestamp
+            String key = "notification_" + System.currentTimeMillis();
+            
+            // Store notification data using PreferenceRepository
+            disposables.add(
+                preferenceRepository.setPreferenceSetting(key + "_package", packageName)
+                    .andThen(preferenceRepository.setPreferenceSetting(key + "_title", title))
+                    .andThen(preferenceRepository.setPreferenceSetting(key + "_text", text))
+                    .andThen(preferenceRepository.getPreferenceSetting("notification_count", 0))
+                    .flatMapCompletable(count -> {
+                        int newCount = count + 1;
+                        if (newCount > 50) {
+                            // Limit number of stored notifications to 50
+                            return preferenceRepository.setPreferenceSetting("notification_count", 1);
+                        } else {
+                            return preferenceRepository.setPreferenceSetting("notification_count", newCount);
+                        }
+                    })
+                    .subscribeOn(Schedulers.io())
+                    .subscribe(
+                        () -> Log.d(TAG, "Notification saved for analysis"),
+                        throwable -> Log.e(TAG, "Error saving notification for analysis", throwable)
+                    )
+            );
         } else {
-            editor.putInt("notification_count", count + 1);
+            // Fallback to old SharedPreferences method if repository is not available
+            SharedPreferences prefs = getSharedPreferences("notification_analysis", MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+
+            // Create unique key based on timestamp
+            String key = "notification_" + System.currentTimeMillis();
+
+            editor.putString(key + "_package", packageName);
+            editor.putString(key + "_title", title);
+            editor.putString(key + "_text", text);
             editor.apply();
+
+            // Limit number of stored notifications to 50
+            int count = prefs.getInt("notification_count", 0);
+            if (count > 50) {
+                // Remove oldest notifications - simplified implementation
+                editor.putInt("notification_count", 1);
+                editor.apply();
+            } else {
+                editor.putInt("notification_count", count + 1);
+                editor.apply();
+            }
         }
     }
 
@@ -248,34 +357,95 @@ public class ShiptNotificationListenerService extends NotificationListenerServic
 
         Log.d(TAG, "Processing tip: Order #" + orderId + ", Amount: $" + tipAmount);
 
-        // Find the delivery matching this order ID using repository
-        repository.findDeliveryByOrderId(orderId)
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    if (queryDocumentSnapshots.isEmpty()) {
-                        // No matching delivery found, save as pending tip
-                        repository.storePendingTip(orderId, tipAmount)
-                                .addOnSuccessListener(documentReference -> {
-                                    Log.d(TAG, "Stored pending tip for Order #" + orderId);
-                                })
-                                .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Error storing pending tip", e);
-                                });
-                        return;
-                    }
+        if (deliveryRepository == null) {
+            Log.e(TAG, "Repository not initialized, cannot process tip");
+            return;
+        }
 
-                    // Update existing delivery with the tip information
-                    String documentId = queryDocumentSnapshots.getDocuments().get(0).getId();
-                    repository.updateDeliveryWithTip(documentId, tipAmount)
-                            .addOnSuccessListener(aVoid -> {
-                                Log.d(TAG, "Successfully updated delivery with tip");
-                            })
-                            .addOnFailureListener(e -> {
-                                Log.e(TAG, "Error updating delivery with tip", e);
-                            });
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error finding delivery for tip", e);
-                    repository.storePendingTip(orderId, tipAmount);
-                });
+        // Find delivery by order ID
+        disposables.add(
+            findDeliveryByOrderId(orderId)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    delivery -> {
+                        // Found the delivery, update it with the tip
+                        updateDeliveryWithTip(delivery.getDeliveryId(), tipAmount);
+                    },
+                    throwable -> {
+                        // No matching delivery found, save as pending tip
+                        Log.d(TAG, "No matching delivery found for Order #" + orderId + ", storing as pending tip");
+                        disposables.add(
+                            storePendingTip(orderId, tipAmount)
+                                .subscribeOn(Schedulers.io())
+                                .observeOn(AndroidSchedulers.mainThread())
+                                .subscribe(
+                                    () -> Log.d(TAG, "Stored pending tip for Order #" + orderId),
+                                    error -> Log.e(TAG, "Error storing pending tip", error)
+                                )
+                        );
+                    }
+                )
+        );
+    }
+    
+    /**
+     * Find a delivery by its order ID
+     * @param orderId The order ID to search for
+     * @return Single that emits the found delivery or an error if not found
+     */
+    private Single<Delivery> findDeliveryByOrderId(String orderId) {
+        if (deliveryRepository == null) {
+            return Single.error(new IllegalStateException("Repository not initialized"));
+        }
+        
+        return deliveryRepository.getAllDeliveries()
+            .flatMap(deliveries -> {
+                for (Delivery delivery : deliveries) {
+                    if (delivery.getReference() != null && 
+                        orderId.equals(delivery.getReference().getOrderId())) {
+                        return Single.just(delivery);
+                    }
+                }
+                return Single.error(new Exception("Delivery not found"));
+            });
+    }
+    
+    /**
+     * Store a pending tip for later processing
+     * @param orderId The order ID
+     * @param tipAmount The tip amount
+     * @return Completable that completes when the tip is stored
+     */
+    private Completable storePendingTip(String orderId, double tipAmount) {
+        if (preferenceRepository == null) {
+            return Completable.error(new IllegalStateException("Repository not initialized"));
+        }
+        
+        // Store in preferences with a prefix to identify pending tips
+        String key = "pending_tip_" + orderId;
+        return preferenceRepository.setPreferenceSetting(key, tipAmount);
+    }
+    
+    /**
+     * Update a delivery with a tip amount
+     * @param deliveryId The delivery ID
+     * @param tipAmount The tip amount
+     */
+    private void updateDeliveryWithTip(String deliveryId, double tipAmount) {
+        if (deliveryRepository == null) {
+            Log.e(TAG, "Repository not initialized, cannot update delivery");
+            return;
+        }
+        
+        disposables.add(
+            deliveryRepository.updateDeliveryTip(deliveryId, tipAmount)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    () -> Log.d(TAG, "Successfully updated delivery with tip"),
+                    throwable -> Log.e(TAG, "Error updating delivery with tip", throwable)
+                )
+        );
     }
 }

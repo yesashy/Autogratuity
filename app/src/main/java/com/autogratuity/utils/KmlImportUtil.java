@@ -6,12 +6,16 @@ import android.util.Log;
 import android.util.Xml;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-
-import com.google.firebase.Timestamp;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Coordinates;
+import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.model.Metadata;
+import com.autogratuity.data.model.Reference;
+import com.autogratuity.data.model.Status;
+import com.autogratuity.data.model.Times;
+import com.autogratuity.data.model.Amounts;
+import com.autogratuity.data.repository.address.AddressRepository;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -20,15 +24,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
+
+/**
+ * Utility for importing KML and KMZ files
+ * Updated to use domain repositories with RxJava
+ */
 public class KmlImportUtil {
     private static final String TAG = "KmlImportUtil";
 
@@ -39,33 +49,35 @@ public class KmlImportUtil {
     private static final Pattern TIP_PATTERN = Pattern.compile("\\$(\\d+\\.\\d+)");
 
     private final Context context;
-    private final FirebaseFirestore db;
-    private final FirebaseAuth mAuth;
+    private final DeliveryRepository deliveryRepository;
+    private final AddressRepository addressRepository;
+    private final CompositeDisposable disposables = new CompositeDisposable();
 
     // Keep track of imports
     private int totalPlacemarks = 0;
     private AtomicInteger processedPlacemarks = new AtomicInteger(0);
 
-    public KmlImportUtil(Context context) {
+    /**
+     * Create a new KmlImportUtil
+     *
+     * @param context The application context
+     * @param deliveryRepository The repository for delivery operations
+     * @param addressRepository The repository for address operations
+     */
+    public KmlImportUtil(Context context, DeliveryRepository deliveryRepository, 
+                       AddressRepository addressRepository) {
         this.context = context;
-        this.db = FirebaseFirestore.getInstance();
-        this.mAuth = FirebaseAuth.getInstance();
+        this.deliveryRepository = deliveryRepository;
+        this.addressRepository = addressRepository;
     }
 
     /**
      * Import data from a KML or KMZ file
+     * 
      * @param uri The URI of the KML or KMZ file
      * @return true if import started successfully, false otherwise
      */
     public boolean importFromKmlKmz(Uri uri) {
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            Toast.makeText(context, "Please login first", Toast.LENGTH_SHORT).show();
-            return false;
-        }
-
-        final String userId = currentUser.getUid();
-
         try {
             InputStream inputStream = context.getContentResolver().openInputStream(uri);
             if (inputStream == null) {
@@ -82,7 +94,7 @@ public class KmlImportUtil {
                 while ((zipEntry = zipInputStream.getNextEntry()) != null) {
                     if (zipEntry.getName().toLowerCase().endsWith(".kml")) {
                         // Found the KML file inside the KMZ
-                        parseKml(zipInputStream, userId);
+                        parseKml(zipInputStream);
                         break;
                     }
                 }
@@ -90,7 +102,7 @@ public class KmlImportUtil {
                 zipInputStream.close();
             } else {
                 // For KML files, parse directly
-                parseKml(inputStream, userId);
+                parseKml(inputStream);
                 inputStream.close();
             }
 
@@ -102,7 +114,12 @@ public class KmlImportUtil {
         }
     }
 
-    private void parseKml(InputStream inputStream, String userId) {
+    /**
+     * Parse KML data from an input stream
+     * 
+     * @param inputStream The input stream containing KML data
+     */
+    private void parseKml(InputStream inputStream) {
         try {
             XmlPullParser parser = Xml.newPullParser();
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
@@ -163,7 +180,7 @@ public class KmlImportUtil {
                     case XmlPullParser.END_TAG:
                         if ("Placemark".equals(parser.getName()) && name != null) {
                             // Process completed placemark
-                            processPlacemark(name, description, coordinates, styleUrl, userId);
+                            processPlacemark(name, description, coordinates, styleUrl);
                         }
                         currentTag = "";
                         break;
@@ -171,14 +188,23 @@ public class KmlImportUtil {
                 eventType = parser.next();
             }
 
-            Toast.makeText(context, "Started import of " + totalPlacemarks + " locations", Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, "Started import of " + totalPlacemarks + " locations", 
+                    Toast.LENGTH_SHORT).show();
 
         } catch (XmlPullParserException | IOException e) {
             Log.e(TAG, "Error parsing KML", e);
-            Toast.makeText(context, "Error parsing KML: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, "Error parsing KML: " + e.getMessage(), 
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
+    /**
+     * Count placemarks in KML data
+     * 
+     * @param parser The XML parser
+     * @throws XmlPullParserException If parsing fails
+     * @throws IOException If reading fails
+     */
     private void countPlacemarks(XmlPullParser parser) throws XmlPullParserException, IOException {
         int eventType = parser.getEventType();
         totalPlacemarks = 0;
@@ -194,7 +220,15 @@ public class KmlImportUtil {
         Log.d(TAG, "Found " + totalPlacemarks + " placemarks in KML");
     }
 
-    private void processPlacemark(String name, String description, String coordinates, String styleUrl, String userId) {
+    /**
+     * Process a placemark from KML data
+     * 
+     * @param name The placemark name
+     * @param description The placemark description
+     * @param coordinates The placemark coordinates
+     * @param styleUrl The placemark style URL
+     */
+    private void processPlacemark(String name, String description, String coordinates, String styleUrl) {
         Log.d(TAG, "Processing placemark: " + name);
 
         // Extract order ID from name
@@ -209,61 +243,113 @@ public class KmlImportUtil {
         double tipAmount = extractTipAmount(name);
 
         // Use address from name as that's where it is in Google Maps pins
-        String address = name;
+        String addressText = name;
         if (orderId.equals(name)) {
             // If name is just the order ID, try to use coordinates or description
-            address = "Location at " + (coordinates != null ? formatCoordinates(coordinates) : "Unknown");
+            addressText = "Location at " + 
+                    (coordinates != null ? formatCoordinates(coordinates) : "Unknown");
         }
 
-        // Create delivery document
-        Map<String, Object> delivery = new HashMap<>();
-        delivery.put("orderId", orderId);
-        delivery.put("address", address);
-        delivery.put("deliveryDate", new Timestamp(new Date()));
-        delivery.put("userId", userId);
-        delivery.put("importDate", new Timestamp(new Date()));
-
+        // Extract coordinates for location
+        Coordinates location = null;
         if (coordinates != null) {
-            delivery.put("coordinates", coordinates.trim());
+            String[] parts = coordinates.split(",");
+            if (parts.length >= 2) {
+                try {
+                    double longitude = Double.parseDouble(parts[0]);
+                    double latitude = Double.parseDouble(parts[1]);
+                    location = new Coordinates(latitude, longitude);
+                } catch (NumberFormatException e) {
+                    Log.w(TAG, "Invalid coordinates format: " + coordinates);
+                }
+            }
         }
 
+        // Create address
+        Address address = new Address();
+        address.setFullAddress(addressText);
+        address.setNormalizedAddress(addressRepository.normalizeAddress(addressText));
+        
+        if (location != null) {
+            address.setLocation(location);
+        }
+        
+        // Create delivery
+        Delivery delivery = new Delivery();
+        
+        // Set address
+        delivery.setAddress(address);
+        
+        // Set reference (will be updated with address ID after saving)
+        Reference reference = new Reference();
+        reference.setAddressText(addressText);
+        delivery.setReference(reference);
+        
+        // Set metadata
+        Metadata metadata = new Metadata();
+        metadata.setOrderId(orderId);
+        metadata.setCreatedAt(new Date());
+        metadata.setSource("kml_import");
+        delivery.setMetadata(metadata);
+        
+        // Set times
+        Times times = new Times();
+        times.setCreatedAt(new Date());
+        times.setOrderedAt(new Date());
+        delivery.setTimes(times);
+        
+        // Set status
+        Status status = new Status();
+        status.setCompleted(true);
+        status.setTipped(tipAmount > 0);
+        delivery.setStatus(status);
+        
+        // Set amounts if tip found
         if (tipAmount > 0) {
-            delivery.put("tipAmount", tipAmount);
-            delivery.put("tipDate", new Timestamp(new Date()));
+            Amounts amounts = new Amounts();
+            amounts.setTipAmount(tipAmount);
+            delivery.setAmounts(amounts);
+            
+            // Set tipped time
+            times.setTippedAt(new Date());
         }
-
-        if (styleUrl != null) {
-            String color = styleUrl.replace("#", "").trim();
-            delivery.put("mapColor", color);
+        
+        // Set notes with description if available
+        if (description != null && !description.isEmpty()) {
+            delivery.setNotes(description);
         }
-
-        // Create final copies of variables for use in lambda
-        final String finalOrderId = orderId;
-        final String finalAddress = address;
-        final double finalTipAmount = tipAmount;
-        final String finalCoordinates = coordinates;
-
-        // Save to Firestore
-        db.collection("deliveries")
-                .add(delivery)
-                .addOnSuccessListener(documentReference -> {
-                    Log.d(TAG, "Added delivery: " + finalOrderId);
-                    updateAddress(finalAddress, finalOrderId, finalTipAmount, finalCoordinates, userId);
-
-                    // Update counter and check if import is complete
-                    int processed = processedPlacemarks.incrementAndGet();
-                    if (processed == totalPlacemarks) {
-                        // All placemarks processed
-                        Toast.makeText(context, "Import complete: " + processed + " locations imported",
-                                Toast.LENGTH_SHORT).show();
+        
+        // Save delivery to repository
+        disposables.add(
+            deliveryRepository.addDelivery(delivery)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    documentReference -> {
+                        Log.d(TAG, "Added delivery: " + orderId);
+                        
+                        // Update counter and check if import is complete
+                        int processed = processedPlacemarks.incrementAndGet();
+                        if (processed == totalPlacemarks) {
+                            // All placemarks processed
+                            Toast.makeText(context, "Import complete: " + processed + 
+                                    " locations imported", Toast.LENGTH_SHORT).show();
+                        }
+                    },
+                    error -> {
+                        Log.e(TAG, "Error adding delivery", error);
+                        processedPlacemarks.incrementAndGet();
                     }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error adding delivery", e);
-                    processedPlacemarks.incrementAndGet();
-                });
+                )
+        );
     }
 
+    /**
+     * Format coordinates for display
+     * 
+     * @param coordinates The raw coordinates string
+     * @return Formatted coordinates string
+     */
     private String formatCoordinates(String coordinates) {
         // Turn "-93.760542,41.684084,0" into a more readable format
         String[] parts = coordinates.split(",");
@@ -279,6 +365,12 @@ public class KmlImportUtil {
         return coordinates;
     }
 
+    /**
+     * Extract order ID from placemark name
+     * 
+     * @param placemark The placemark name
+     * @return Order ID if found, null otherwise
+     */
     private String extractOrderId(String placemark) {
         if (placemark == null) return null;
 
@@ -291,6 +383,12 @@ public class KmlImportUtil {
         return null;
     }
 
+    /**
+     * Extract tip amount from placemark name
+     * 
+     * @param name The placemark name
+     * @return Tip amount if found, 0.0 otherwise
+     */
     private double extractTipAmount(String name) {
         if (name == null) return 0.0;
 
@@ -306,95 +404,13 @@ public class KmlImportUtil {
 
         return 0.0;
     }
-
-    private void updateAddress(@NonNull String fullAddress, @NonNull String orderId,
-                               double tipAmount, String coordinates, @NonNull String userId) {
-        // Use coordinates as a unique identifier for this address if available
-        String normalizedAddress = fullAddress.toLowerCase().trim();
-        String addressKey = coordinates != null ? coordinates.trim() : normalizedAddress;
-
-        // Check if address exists
-        db.collection("addresses")
-                .whereEqualTo("coordinatesKey", addressKey)
-                .whereEqualTo("userId", userId)
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
-                    if (!queryDocumentSnapshots.isEmpty()) {
-                        // Address exists, update it
-                        String addressId = queryDocumentSnapshots.getDocuments().get(0).getId();
-
-                        // Update order IDs array
-                        List<String> orderIds = new ArrayList<>();
-                        if (queryDocumentSnapshots.getDocuments().get(0).contains("orderIds")) {
-                            Object orderIdsObj = queryDocumentSnapshots.getDocuments().get(0).get("orderIds");
-                            if (orderIdsObj instanceof List) {
-                                try {
-                                    @SuppressWarnings("unchecked")
-                                    List<String> existingOrderIds = (List<String>) orderIdsObj;
-                                    orderIds.addAll(existingOrderIds);
-                                } catch (ClassCastException e) {
-                                    Log.e(TAG, "Error casting orderIds", e);
-                                }
-                            }
-                        }
-
-                        if (!orderIds.contains(orderId)) {
-                            orderIds.add(orderId);
-                        }
-
-                        // Update delivery count
-                        Long deliveryCount = queryDocumentSnapshots.getDocuments().get(0).getLong("deliveryCount");
-                        long newDeliveryCount = (deliveryCount != null) ? deliveryCount + 1 : 1;
-
-                        // Update tips if applicable
-                        Double totalTips = queryDocumentSnapshots.getDocuments().get(0).getDouble("totalTips");
-                        double newTotalTips = (totalTips != null) ? totalTips : 0.0;
-
-                        if (tipAmount > 0) {
-                            newTotalTips += tipAmount;
-                        }
-
-                        double avgTip = newTotalTips / newDeliveryCount;
-
-                        // Update address document
-                        Map<String, Object> updateData = new HashMap<>();
-                        updateData.put("orderIds", orderIds);
-                        updateData.put("deliveryCount", newDeliveryCount);
-                        updateData.put("totalTips", newTotalTips);
-                        updateData.put("averageTip", avgTip);
-
-                        db.collection("addresses").document(addressId)
-                                .update(updateData)
-                                .addOnFailureListener(e ->
-                                        Log.e(TAG, "Error updating address", e)
-                                );
-                    } else {
-                        // Create new address
-                        List<String> orderIds = new ArrayList<>();
-                        orderIds.add(orderId);
-
-                        Map<String, Object> addressData = new HashMap<>();
-                        addressData.put("fullAddress", fullAddress);
-                        addressData.put("normalizedAddress", normalizedAddress);
-                        addressData.put("coordinatesKey", addressKey);
-                        addressData.put("orderIds", orderIds);
-                        addressData.put("totalTips", tipAmount);
-                        addressData.put("deliveryCount", 1);
-                        addressData.put("averageTip", tipAmount);
-                        addressData.put("userId", userId);
-
-                        if (coordinates != null) {
-                            addressData.put("coordinates", coordinates);
-                        }
-
-                        db.collection("addresses").add(addressData)
-                                .addOnFailureListener(e ->
-                                        Log.e(TAG, "Error adding address", e)
-                                );
-                    }
-                })
-                .addOnFailureListener(e ->
-                        Log.e(TAG, "Error querying addresses", e)
-                );
+    
+    /**
+     * Clean up resources when no longer needed
+     */
+    public void dispose() {
+        if (disposables != null && !disposables.isDisposed()) {
+            disposables.dispose();
+        }
     }
 }

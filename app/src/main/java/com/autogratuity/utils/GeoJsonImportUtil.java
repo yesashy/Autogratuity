@@ -1,14 +1,20 @@
 package com.autogratuity.utils;
 
 import android.content.Context;
-import android.net.Uri;
 import android.util.Log;
 
-import com.autogratuity.models.Address;
-import com.autogratuity.models.Coordinates;
-import com.autogratuity.models.DeliveryData;
-import com.autogratuity.models.TipData;
-import com.autogratuity.repositories.IFirestoreRepository;
+import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Coordinates;
+import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.model.Amounts;
+import com.autogratuity.data.model.Metadata;
+import com.autogratuity.data.model.Reference;
+import com.autogratuity.data.model.Times;
+import com.autogratuity.data.model.Status;
+import com.autogratuity.data.repository.address.AddressRepository;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
+import com.autogratuity.data.repository.sync.SyncRepository;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -17,18 +23,28 @@ import com.google.gson.JsonParser;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import io.reactivex.Single;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.schedulers.Schedulers;
+
 /**
  * Utility class for importing GeoJSON data
  * Supports extracting location data from Google Maps exports
+ * Updated to use domain repositories
  */
 public class GeoJsonImportUtil {
     private static final String TAG = "GeoJsonImportUtil";
-    private final IFirestoreRepository firestoreRepository;
+    private final AddressRepository addressRepository;
+    private final DeliveryRepository deliveryRepository;
+    private final SyncRepository syncRepository;
     private final boolean skipDuplicates;
     private final boolean updateExisting;
     
@@ -43,25 +59,38 @@ public class GeoJsonImportUtil {
     private final List<String> warnings = new ArrayList<>();
     
     /**
-     * Create a new GeoJsonImportUtil with a Firestore repository
+     * Create a new GeoJsonImportUtil with domain repositories
      * 
-     * @param firestoreRepository The repository to use for saving data
+     * @param addressRepository Repository for address operations
+     * @param deliveryRepository Repository for delivery operations
+     * @param syncRepository Repository for sync operations
      */
-    public GeoJsonImportUtil(IFirestoreRepository firestoreRepository) {
-        this.firestoreRepository = firestoreRepository;
+    public GeoJsonImportUtil(AddressRepository addressRepository, 
+                            DeliveryRepository deliveryRepository,
+                            SyncRepository syncRepository) {
+        this.addressRepository = addressRepository;
+        this.deliveryRepository = deliveryRepository;
+        this.syncRepository = syncRepository;
         this.skipDuplicates = false;
         this.updateExisting = true;
     }
     
     /**
-     * Create a new GeoJsonImportUtil with a Firestore repository and validation options
+     * Create a new GeoJsonImportUtil with domain repositories and validation options
      * 
-     * @param firestoreRepository The repository to use for saving data
+     * @param addressRepository Repository for address operations
+     * @param deliveryRepository Repository for delivery operations
+     * @param syncRepository Repository for sync operations
      * @param skipDuplicates Whether to skip duplicate records
      * @param updateExisting Whether to update existing records
      */
-    public GeoJsonImportUtil(IFirestoreRepository firestoreRepository, boolean skipDuplicates, boolean updateExisting) {
-        this.firestoreRepository = firestoreRepository;
+    public GeoJsonImportUtil(AddressRepository addressRepository, 
+                            DeliveryRepository deliveryRepository,
+                            SyncRepository syncRepository,
+                            boolean skipDuplicates, boolean updateExisting) {
+        this.addressRepository = addressRepository;
+        this.deliveryRepository = deliveryRepository;
+        this.syncRepository = syncRepository;
         this.skipDuplicates = skipDuplicates;
         this.updateExisting = updateExisting;
     }
@@ -71,56 +100,58 @@ public class GeoJsonImportUtil {
      * 
      * @param context The application context
      * @param inputStream The input stream containing GeoJSON data
-     * @return true if import was successful, false otherwise
+     * @return Single that emits true if import was successful, false otherwise
      */
-    public boolean importFromGeoJson(Context context, InputStream inputStream) {
-        try {
-            // Reset statistics
-            newCount = 0;
-            updatedCount = 0;
-            duplicateCount = 0;
-            invalidCount = 0;
-            warnings.clear();
-            
-            // Parse the GeoJSON file
-            JsonParser parser = new JsonParser();
-            JsonObject geoJson = parser.parse(new InputStreamReader(inputStream)).getAsJsonObject();
-            
-            // Extract features array
-            if (geoJson.has("features")) {
-                final JsonArray features = geoJson.getAsJsonArray("features");
-                processFeatures(features);
-                return true;
-            } else {
-                Log.e(TAG, "Invalid GeoJSON format: missing 'features' array");
-                warnings.add("Invalid GeoJSON format: missing 'features' array");
+    public Single<Boolean> importFromGeoJson(Context context, InputStream inputStream) {
+        return Single.fromCallable(() -> {
+            try {
+                // Reset statistics
+                newCount = 0;
+                updatedCount = 0;
+                duplicateCount = 0;
+                invalidCount = 0;
+                warnings.clear();
+                
+                // Parse the GeoJSON file
+                JsonParser parser = new JsonParser();
+                JsonObject geoJson = parser.parse(new InputStreamReader(inputStream)).getAsJsonObject();
+                
+                // Extract features array
+                if (geoJson.has("features")) {
+                    final JsonArray features = geoJson.getAsJsonArray("features");
+                    return processFeatures(features);
+                } else {
+                    Log.e(TAG, "Invalid GeoJSON format: missing 'features' array");
+                    warnings.add("Invalid GeoJSON format: missing 'features' array");
+                    return false;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error importing GeoJSON: " + e.getMessage());
+                warnings.add("Error importing GeoJSON: " + e.getMessage());
                 return false;
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Error importing GeoJSON: " + e.getMessage());
-            warnings.add("Error importing GeoJSON: " + e.getMessage());
-            return false;
-        }
+        });
     }
     
     /**
      * Process features from GeoJSON data
      * 
      * @param features Array of GeoJSON features
+     * @return true if processing was successful, false otherwise
      */
-    private void processFeatures(JsonArray features) {
+    private boolean processFeatures(JsonArray features) {
         // Create a final list to store all deliveries
-        final List<DeliveryData> deliveries = new ArrayList<>();
+        final List<Delivery> deliveries = new ArrayList<>();
         
         // Use AtomicInteger for counters that need to be modified in lambdas
         final AtomicInteger successCount = new AtomicInteger(0);
         final AtomicInteger failCount = new AtomicInteger(0);
         
-        // Process each feature outside of lambda to avoid "effectively final" issues
+        // Process each feature
         for (JsonElement featureElement : features) {
             try {
                 final JsonObject feature = featureElement.getAsJsonObject();
-                final DeliveryData delivery = convertFeatureToDelivery(feature);
+                final Delivery delivery = convertFeatureToDelivery(feature);
                 
                 if (delivery != null) {
                     deliveries.add(delivery);
@@ -136,40 +167,25 @@ public class GeoJsonImportUtil {
         }
         
         // Validate deliveries before saving
-        DataValidationSystem validationSystem = new DataValidationSystem(firestoreRepository);
-        DataValidationSystem.ValidationResult validationResult = 
-                validationSystem.validateDeliveries(deliveries, skipDuplicates, updateExisting);
+        List<Delivery> validatedDeliveries = validateDeliveries(deliveries);
         
-        // Store validation statistics
-        newCount = validationResult.getNewCount();
-        updatedCount = validationResult.getUpdatedCount();
-        duplicateCount = validationResult.getDuplicateCount();
-        invalidCount = validationResult.getInvalidCount();
-        warnings.addAll(validationResult.getWarnings());
-        
-        List<DeliveryData> validatedDeliveries = validationResult.getValidatedDeliveries();
-        
-        // Save all processed deliveries to Firestore
+        // Save all processed deliveries to repositories
         if (!validatedDeliveries.isEmpty()) {
-            saveDeliveriesToFirestore(validatedDeliveries);
+            return saveDeliveriesToRepositories(validatedDeliveries);
         } else {
             Log.w(TAG, "No valid deliveries to save after validation");
             warnings.add("No valid deliveries to save after validation");
+            return false;
         }
-        
-        Log.i(TAG, String.format(
-                "Import complete. New: %d, Updated: %d, Duplicates: %d, Invalid: %d, Total: %d",
-                newCount, updatedCount, duplicateCount, invalidCount, 
-                successCount.get() + failCount.get()));
     }
     
     /**
-     * Convert a GeoJSON feature to a DeliveryData object
+     * Convert a GeoJSON feature to a Delivery object
      * 
      * @param feature The GeoJSON feature
-     * @return DeliveryData object, or null if conversion failed
+     * @return Delivery object, or null if conversion failed
      */
-    private DeliveryData convertFeatureToDelivery(JsonObject feature) {
+    private Delivery convertFeatureToDelivery(JsonObject feature) {
         try {
             // Extract properties
             final JsonObject properties = feature.getAsJsonObject("properties");
@@ -197,10 +213,15 @@ public class GeoJsonImportUtil {
             // Create address
             final Address address = new Address();
             address.setFullAddress(name);
-            address.setCoordinates(coordinates);
+            address.setLocation(coordinates);
+            
             // Normalize address and create search terms
-            String normalizedAddress = name.toLowerCase().trim();
+            String normalizedAddress = addressRepository.normalizeAddress(name);
             address.setNormalizedAddress(normalizedAddress);
+            
+            // Parse address components
+            Address.Components components = addressRepository.parseAddressComponents(name);
+            address.setComponents(components);
             
             // Create search terms for improved searching
             List<String> searchTerms = new ArrayList<>();
@@ -234,24 +255,48 @@ public class GeoJsonImportUtil {
                 warnings.add("Could not parse tip amount from '" + description + "'");
             }
             
-            // Create tip data
-            final TipData tipData = new TipData();
-            tipData.setAmount(tipAmount);
-            tipData.setSource("geojson_import");
+            // Create a delivery with proper structure
+            final Delivery delivery = new Delivery();
             
-            // Create delivery data
-            final DeliveryData deliveryData = new DeliveryData();
-            deliveryData.setAddress(address);
-            deliveryData.setTipData(tipData);
-            deliveryData.setNotes(description);
-            deliveryData.setImportedFromGeoJson(true);
-            deliveryData.setTimestamp(System.currentTimeMillis());
+            // Set address as the reference
+            Reference reference = new Reference();
+            reference.setAddressId(null); // Will be set when address is saved
+            reference.setAddressText(address.getFullAddress());
+            delivery.setReference(reference);
+            delivery.setAddress(address);
             
+            // Set amounts
+            Amounts amounts = new Amounts();
+            amounts.setTipAmount(tipAmount);
+            amounts.setDeliveryAmount(0.0); // Unknown from GeoJSON
+            amounts.setOrderAmount(0.0); // Unknown from GeoJSON
+            delivery.setAmounts(amounts);
+            
+            // Set metadata
+            Metadata metadata = new Metadata();
+            metadata.setCreatedAt(new Date());
+            metadata.setSource("geojson_import");
+            metadata.setImportSource("GeoJSON");
             if (orderId != null) {
-                deliveryData.setOrderId(orderId);
+                metadata.setOrderId(orderId);
             }
+            delivery.setMetadata(metadata);
             
-            return deliveryData;
+            // Set times
+            Times times = new Times();
+            times.setCreatedAt(new Date());
+            delivery.setTimes(times);
+            
+            // Set status
+            Status status = new Status();
+            status.setTipped(tipAmount > 0);
+            status.setCompleted(true);
+            delivery.setStatus(status);
+            
+            // Set notes
+            delivery.setNotes(description);
+            
+            return delivery;
         } catch (Exception e) {
             Log.e(TAG, "Error converting feature to delivery: " + e.getMessage());
             warnings.add("Error converting feature to delivery: " + e.getMessage());
@@ -260,7 +305,7 @@ public class GeoJsonImportUtil {
     }
     
     /**
-     * Extract order ID from text using regex with improved error handling
+     * Extract order ID from text using regex
      * 
      * @param text Text to extract from
      * @return Order ID if found, null otherwise
@@ -284,26 +329,156 @@ public class GeoJsonImportUtil {
     }
     
     /**
-     * Save deliveries to Firestore in a batch
+     * Validate deliveries before saving
      * 
-     * @param deliveries List of DeliveryData objects to save
+     * @param deliveries List of Delivery objects to validate
+     * @return List of validated Delivery objects
      */
-    private void saveDeliveriesToFirestore(final List<DeliveryData> deliveries) {
-        if (deliveries.isEmpty()) {
-            Log.w(TAG, "No deliveries to save");
-            return;
+    private List<Delivery> validateDeliveries(final List<Delivery> deliveries) {
+        List<Delivery> validated = new ArrayList<>();
+        
+        for (Delivery delivery : deliveries) {
+            // Check required fields
+            if (delivery.getAddress() == null || delivery.getAddress().getFullAddress() == null) {
+                invalidCount++;
+                warnings.add("Skipping delivery with no address");
+                continue;
+            }
+            
+            if (delivery.getAddress().getLocation() == null || 
+                    (delivery.getAddress().getLocation().getLatitude() == 0 && 
+                     delivery.getAddress().getLocation().getLongitude() == 0)) {
+                invalidCount++;
+                warnings.add("Skipping delivery with invalid coordinates: " + delivery.getAddress().getFullAddress());
+                continue;
+            }
+            
+            // Check for duplicates if needed
+            if (skipDuplicates) {
+                try {
+                    String normalizedAddress = addressRepository.normalizeAddress(delivery.getAddress().getFullAddress());
+                    Address existingAddress = addressRepository.findAddressByNormalizedAddress(normalizedAddress)
+                            .blockingGet();
+                    
+                    if (existingAddress != null) {
+                        duplicateCount++;
+                        
+                        if (updateExisting) {
+                            // Update existing address with new data if needed
+                            delivery.getAddress().setAddressId(existingAddress.getAddressId());
+                            validated.add(delivery);
+                        } else {
+                            warnings.add("Skipping duplicate address: " + delivery.getAddress().getFullAddress());
+                        }
+                        
+                        continue;
+                    }
+                } catch (Exception e) {
+                    // Address not found, which is fine for new records
+                }
+            }
+            
+            // Add valid deliveries
+            validated.add(delivery);
         }
         
-        firestoreRepository.batchSaveDeliveries(deliveries)
-            .addOnSuccessListener(aVoid -> {
-                Log.i(TAG, "Successfully saved " + deliveries.size() + " deliveries to Firestore");
-                // Refresh UI by notifying the repository listeners
-                firestoreRepository.notifyDataChanged();
-            })
-            .addOnFailureListener(e -> {
-                Log.e(TAG, "Failed to save deliveries: " + e.getMessage());
-                warnings.add("Failed to save deliveries: " + e.getMessage());
-            });
+        return validated;
+    }
+    
+    /**
+     * Save deliveries to repositories with proper error handling
+     * 
+     * @param deliveries List of Delivery objects to save
+     * @return true if saving was successful, false otherwise
+     */
+    private boolean saveDeliveriesToRepositories(final List<Delivery> deliveries) {
+        if (deliveries.isEmpty()) {
+            Log.w(TAG, "No deliveries to save");
+            return false;
+        }
+        
+        for (Delivery delivery : deliveries) {
+            try {
+                // First try to find existing address
+                Address existingAddress = null;
+                String normalizedAddress = addressRepository.normalizeAddress(delivery.getAddress().getFullAddress());
+                
+                try {
+                    existingAddress = addressRepository.findAddressByNormalizedAddress(normalizedAddress)
+                            .blockingGet();
+                } catch (Exception e) {
+                    // Address not found, will create new one
+                }
+                
+                // Handle the address
+                if (existingAddress != null) {
+                    // Use existing address
+                    Reference reference = delivery.getReference();
+                    reference.setAddressId(existingAddress.getAddressId());
+                    delivery.setReference(reference);
+                    
+                    if (updateExisting) {
+                        // Update the address if needed
+                        addressRepository.updateAddress(delivery.getAddress())
+                                .blockingAwait();
+                        updatedCount++;
+                    } else {
+                        // Use the existing address
+                        delivery.setAddress(existingAddress);
+                    }
+                } else {
+                    // Create new address
+                    DocumentReference addressRef = addressRepository.addAddress(delivery.getAddress())
+                            .blockingGet();
+                    
+                    // Update reference with new address ID
+                    String addressId = addressRef.getId();
+                    delivery.getAddress().setAddressId(addressId);
+                    Reference reference = delivery.getReference();
+                    reference.setAddressId(addressId);
+                    delivery.setReference(reference);
+                    
+                    newCount++;
+                }
+                
+                // Save the delivery
+                deliveryRepository.addDelivery(delivery)
+                        .blockingGet();
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error saving delivery: " + e.getMessage());
+                warnings.add("Error saving delivery: " + e.getMessage());
+                
+                // If offline, queue for later sync
+                try {
+                    // Convert to map for sync
+                    Map<String, Object> deliveryMap = new HashMap<>();
+                    deliveryMap.put("address", delivery.getAddress());
+                    deliveryMap.put("amounts", delivery.getAmounts());
+                    deliveryMap.put("reference", delivery.getReference());
+                    deliveryMap.put("notes", delivery.getNotes());
+                    deliveryMap.put("metadata", delivery.getMetadata());
+                    deliveryMap.put("times", delivery.getTimes());
+                    deliveryMap.put("status", delivery.getStatus());
+                    
+                    // Enqueue operation for later sync
+                    syncRepository.createEntity("delivery", null, deliveryMap)
+                            .blockingAwait();
+                    
+                    warnings.add("Delivery queued for offline sync: " + delivery.getAddress().getFullAddress());
+                } catch (Exception syncError) {
+                    Log.e(TAG, "Error queueing for sync: " + syncError.getMessage());
+                    warnings.add("Failed to queue for sync: " + syncError.getMessage());
+                    return false;
+                }
+            }
+        }
+        
+        Log.i(TAG, String.format(
+                "Import complete. New: %d, Updated: %d, Duplicates: %d, Invalid: %d",
+                newCount, updatedCount, duplicateCount, invalidCount));
+        
+        return true;
     }
     
     /**

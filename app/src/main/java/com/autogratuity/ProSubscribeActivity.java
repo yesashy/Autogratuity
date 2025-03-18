@@ -3,6 +3,8 @@ package com.autogratuity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+
+import androidx.annotation.NonNull;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -11,31 +13,29 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.lifecycle.ViewModelProvider;
 
+import com.android.billingclient.api.BillingResult;
 import com.android.billingclient.api.Purchase;
 import com.autogratuity.data.model.SubscriptionStatus;
-import com.autogratuity.data.repository.DataRepository;
-import com.autogratuity.data.repository.RepositoryProvider;
+import com.autogratuity.ui.common.RepositoryViewModelFactory;
+import com.autogratuity.ui.subscription.SubscriptionViewModel;
 import com.autogratuity.utils.SubscriptionManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
-
-import io.reactivex.android.schedulers.AndroidSchedulers;
-import io.reactivex.disposables.CompositeDisposable;
-import io.reactivex.schedulers.Schedulers;
 
 /**
  * Activity for user to subscribe to Pro features.
- * Updated to use the repository pattern for subscription management.
+ * Updated to use the MVVM pattern with SubscriptionViewModel.
  */
-public class ProSubscribeActivity extends AppCompatActivity implements SubscriptionManager.PurchasesUpdatedListener {
+public class ProSubscribeActivity extends AppCompatActivity implements com.android.billingclient.api.PurchasesUpdatedListener {
     private static final String TAG = "ProSubscribeActivity";
     
-    // Repository and RxJava components
-    private DataRepository repository;
-    private CompositeDisposable disposables = new CompositeDisposable();
+    // ViewModel reference
+    private SubscriptionViewModel viewModel;
     
     // Subscription manager
     private SubscriptionManager subscriptionManager;
@@ -61,8 +61,10 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_pro_subscribe);
 
-        // Get repository instance
-        repository = RepositoryProvider.getRepository();
+        // Initialize ViewModel
+        viewModel = new ViewModelProvider(this, 
+                RepositoryViewModelFactory.fromRepositoryProvider())
+                .get(SubscriptionViewModel.class);
         
         // Initialize subscription manager
         subscriptionManager = SubscriptionManager.getInstance(this);
@@ -79,8 +81,12 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
         // Initialize UI components
         initializeViews();
         
+        // Set up observers
+        setupObservers();
+        
         // Load current subscription status
-        loadSubscriptionStatus();
+        viewModel.loadSubscriptionStatus();
+        viewModel.checkTrialAvailability();
     }
     
     /**
@@ -162,8 +168,9 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
         });
 
         trialButton.setOnClickListener(v -> {
-            if (subscriptionManager.isTrialAvailable()) {
-                startFreeTrial();
+            if (viewModel.isTrialAvailable().getValue() != null && 
+                viewModel.isTrialAvailable().getValue()) {
+                viewModel.startFreeTrial();
             } else {
                 Toast.makeText(this, "You've already used your free trial", Toast.LENGTH_SHORT).show();
                 trialButton.setEnabled(false);
@@ -172,75 +179,40 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
     }
     
     /**
-     * Start a free trial using the repository
+     * Set up observers for ViewModel LiveData
      */
-    private void startFreeTrial() {
-        showLoading(true);
+    private void setupObservers() {
+        // Observe subscription status
+        viewModel.getSubscriptionStatus().observe(this, this::updateUI);
         
-        // Create a trial subscription
-        SubscriptionStatus trialStatus = new SubscriptionStatus();
-        trialStatus.setUserId(repository.getUserId());
-        trialStatus.setStatus("trial");
-        trialStatus.setActive(true);
+        // Observe trial availability
+        viewModel.isTrialAvailable().observe(this, isAvailable -> {
+            trialButton.setEnabled(isAvailable);
+            trialButton.setAlpha(isAvailable ? 1.0f : 0.5f);
+            
+            if (!isAvailable) {
+                trialButton.setText("Free Trial (Already Used)");
+            }
+        });
         
-        // Set start date to now
-        Date startDate = new Date();
-        trialStatus.setStartDate(startDate);
+        // Observe loading state
+        viewModel.isLoading().observe(this, this::showLoading);
         
-        // Set expiry date to 7 days from now
-        long expiryTimeMillis = System.currentTimeMillis() + (7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
-        Date expiryDate = new Date(expiryTimeMillis);
-        trialStatus.setExpiryDate(expiryDate);
+        // Observe error state
+        viewModel.getError().observe(this, error -> {
+            if (error != null) {
+                showError(error.getMessage());
+            } else {
+                showContent();
+            }
+        });
         
-        // Update subscription status in repository
-        disposables.add(
-            repository.updateSubscriptionStatus(trialStatus)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    () -> {
-                        showContent();
-                        Toast.makeText(this, "Your 7-day free trial has started!", Toast.LENGTH_LONG).show();
-                        finish(); // Return to main activity
-                    },
-                    error -> {
-                        Log.e(TAG, "Error starting free trial", error);
-                        showError("Error starting free trial: " + error.getMessage());
-                    }
-                )
-        );
-    }
-    
-    /**
-     * Load subscription status using the repository
-     */
-    private void loadSubscriptionStatus() {
-        showLoading(true);
-        
-        disposables.add(
-            repository.getSubscriptionStatus()
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    this::updateUI,
-                    this::handleError
-                )
-        );
-    }
-    
-    /**
-     * Set up real-time subscription updates
-     */
-    private void observeSubscriptionStatus() {
-        disposables.add(
-            repository.observeSubscriptionStatus()
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    this::updateUI,
-                    this::handleError
-                )
-        );
+        // Observe toast messages
+        viewModel.getToastMessage().observe(this, message -> {
+            if (message != null && !message.isEmpty()) {
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
     
     /**
@@ -248,6 +220,10 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
      */
     private void updateUI(SubscriptionStatus status) {
         showContent();
+        
+        if (status == null) {
+            return;
+        }
         
         // Update trial button visibility based on status
         boolean isTrial = "trial".equals(status.getStatus());
@@ -263,16 +239,6 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
                 trialButton.setText("Pro plan active (trial not needed)");
             } else {
                 trialButton.setText("Trial active");
-            }
-        } else {
-            // Check if trial is available using legacy method
-            // This can be refactored later to use the repository pattern completely
-            boolean trialAvailable = subscriptionManager.isTrialAvailable();
-            trialButton.setEnabled(trialAvailable);
-            trialButton.setAlpha(trialAvailable ? 1.0f : 0.5f);
-            
-            if (!trialAvailable) {
-                trialButton.setText("Free Trial (Already Used)");
             }
         }
         
@@ -320,73 +286,6 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
                 }
             }
         }
-    }
-    
-    /**
-     * Handle error loading subscription status
-     */
-    private void handleError(Throwable error) {
-        Log.e(TAG, "Error loading subscription status", error);
-        showError("Error loading subscription status: " + error.getMessage());
-    }
-    
-    /**
-     * Process a purchase with the repository
-     */
-    private void processPurchaseWithRepository(Purchase purchase) {
-        showLoading(true);
-        
-        // Extract product ID
-        String productId = purchase.getProducts().isEmpty() ? "" : purchase.getProducts().get(0);
-        
-        // Create subscription status from purchase
-        SubscriptionStatus status = new SubscriptionStatus();
-        status.setUserId(repository.getUserId());
-        status.setStatus("pro");
-        status.setActive(true);
-        status.setOrderId(purchase.getOrderId());
-        status.setProvider("google_play");
-        
-        // Get current date for start date
-        Date startDate = new Date(purchase.getPurchaseTime());
-        status.setStartDate(startDate);
-        
-        // Set lifetime flag for lifetime purchase
-        boolean isLifetime = SubscriptionManager.PRODUCT_ID_PRO_LIFETIME.equals(productId);
-        status.setLifetime(isLifetime);
-        
-        // Set expiry date for non-lifetime purchases
-        if (!isLifetime) {
-            // For a real implementation, this would calculate based on subscription duration
-            // For now, just add a year (or appropriate time) to the purchase date
-            long durationMillis = 0;
-            if (SubscriptionManager.PRODUCT_ID_PRO_MONTHLY.equals(productId)) {
-                durationMillis = 30L * 24 * 60 * 60 * 1000; // 30 days
-            } else if (SubscriptionManager.PRODUCT_ID_PRO_YEARLY.equals(productId)) {
-                durationMillis = 365L * 24 * 60 * 60 * 1000; // 365 days
-            }
-            
-            long expiryTimeMillis = purchase.getPurchaseTime() + durationMillis;
-            Date expiryDate = new Date(expiryTimeMillis);
-            status.setExpiryDate(expiryDate);
-        }
-        
-        // Update subscription status in repository
-        disposables.add(
-            repository.updateSubscriptionStatus(status)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    () -> {
-                        showContent();
-                        Toast.makeText(this, "Thank you for your purchase!", Toast.LENGTH_LONG).show();
-                    },
-                    error -> {
-                        Log.e(TAG, "Error updating subscription", error);
-                        showError("Error updating subscription: " + error.getMessage());
-                    }
-                )
-        );
     }
     
     /**
@@ -450,12 +349,15 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
      * Handle purchase updates from the subscription manager
      */
     @Override
-    public void onPurchasesUpdated(List<Purchase> purchases) {
+    public void onPurchasesUpdated(@NonNull BillingResult billingResult, List<Purchase> purchases) {
         if (purchases != null && !purchases.isEmpty()) {
             for (Purchase purchase : purchases) {
                 if (purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-                    // Process purchase with repository
-                    processPurchaseWithRepository(purchase);
+                    // Get product ID
+                    String productId = purchase.getProducts().isEmpty() ? "" : purchase.getProducts().get(0);
+                    
+                    // Process the purchase with ViewModel
+                    viewModel.processPurchase(purchase, productId);
                     
                     // Also let the subscription manager handle it for backward compatibility
                     subscriptionManager.acknowledgePurchase(purchase);
@@ -468,26 +370,10 @@ public class ProSubscribeActivity extends AppCompatActivity implements Subscript
     protected void onResume() {
         super.onResume();
         // Start observing subscription status when activity is visible
-        observeSubscriptionStatus();
+        viewModel.observeSubscriptionStatus();
         
         // Make sure subscription manager is ready
         subscriptionManager.queryPurchases();
-    }
-    
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // Clear all subscriptions to prevent memory leaks
-        disposables.clear();
-    }
-    
-    @Override
-    protected void onDestroy() {
-        // Ensure all disposables are cleared
-        if (disposables != null && !disposables.isDisposed()) {
-            disposables.dispose();
-        }
-        super.onDestroy();
     }
 
     @Override

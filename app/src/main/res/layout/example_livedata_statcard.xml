@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Example layout showing how to use LiveDataStatCard directly in layout files -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Delivery Stats Example"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Grid layout for stats -->
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:columnCount="2"
+        android:rowCount="3">
+
+        <!-- Total Tips Received -->
+        <com.autogratuity.ui.common.LiveDataStatCard
+            android:id="@+id/stat_total_tips"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            app:statLabel="Tips Received" />
+
+        <!-- Average Tip -->
+        <com.autogratuity.ui.common.LiveDataStatCard
+            android:id="@+id/stat_average_tip"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            app:statLabel="Average Tip" />
+
+        <!-- Delivery Count -->
+        <com.autogratuity.ui.common.LiveDataStatCard
+            android:id="@+id/stat_delivery_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            app:statLabel="Deliveries" />
+
+        <!-- Tip Rate -->
+        <com.autogratuity.ui.common.LiveDataStatCard
+            android:id="@+id/stat_tip_rate"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            app:statLabel="Tip Rate" />
+
+        <!-- Highest Tip -->
+        <com.autogratuity.ui.common.LiveDataStatCard
+            android:id="@+id/stat_highest_tip"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            app:statLabel="Highest Tip" />
+
+        <!-- Pending Count -->
+        <com.autogratuity.ui.common.LiveDataStatCard
+            android:id="@+id/stat_pending_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            app:statLabel="Pending" />
+
+    </GridLayout>
+
+    <!-- Example code comment showing how to bind in a Fragment or Activity -->
+    <!-- 
+    // In your Fragment or Activity:
+    
+    // Get references to the LiveDataStatCards
+    LiveDataStatCard totalTipsCard = findViewById(R.id.stat_total_tips);
+    LiveDataStatCard averageTipCard = findViewById(R.id.stat_average_tip);
+    LiveDataStatCard deliveryCountCard = findViewById(R.id.stat_delivery_count);
+    LiveDataStatCard tipRateCard = findViewById(R.id.stat_tip_rate);
+    LiveDataStatCard highestTipCard = findViewById(R.id.stat_highest_tip);
+    LiveDataStatCard pendingCountCard = findViewById(R.id.stat_pending_count);
+    
+    // Set the lifecycle owner (required for LiveData observation)
+    totalTipsCard.setLifecycleOwner(this);
+    averageTipCard.setLifecycleOwner(this);
+    deliveryCountCard.setLifecycleOwner(this);
+    tipRateCard.setLifecycleOwner(this);
+    highestTipCard.setLifecycleOwner(this);
+    pendingCountCard.setLifecycleOwner(this);
+    
+    // Bind to LiveData from ViewModel
+    totalTipsCard.bindToTotalTips(viewModel.getDeliveryStats());
+    averageTipCard.bindToAverageTip(viewModel.getDeliveryStats());
+    deliveryCountCard.bindToDeliveryCount(viewModel.getDeliveryStats());
+    tipRateCard.bindToTipRate(viewModel.getDeliveryStats());
+    highestTipCard.bindToHighestTip(viewModel.getDeliveryStats());
+    pendingCountCard.bindToPendingCount(viewModel.getDeliveryStats());
+    -->
+
+</LinearLayout>

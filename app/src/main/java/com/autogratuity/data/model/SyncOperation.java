@@ -2,9 +2,9 @@ package com.autogratuity.data.model;
 
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentId;
-import com.google.firebase.firestore.Exclude;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -13,136 +13,60 @@ import java.util.Map;
  */
 public class SyncOperation {
     
+    // Status constants
     public static final String STATUS_PENDING = "pending";
     public static final String STATUS_IN_PROGRESS = "in_progress";
     public static final String STATUS_COMPLETED = "completed";
     public static final String STATUS_FAILED = "failed";
     public static final String STATUS_RETRYING = "retrying";
     
+    // Conflict resolution constants
     public static final String CONFLICT_RESOLUTION_SERVER_WINS = "server_wins";
     public static final String CONFLICT_RESOLUTION_CLIENT_WINS = "client_wins";
-    public static final String CONFLICT_RESOLUTION_MERGE = "merge";
-    
+
     @DocumentId
     private String operationId;
     
     private String userId;
-    private String operationType;  // create, update, delete
-    private String entityType;     // userProfile, address, delivery, etc.
-    private String entityId;
-    private String status;
-    private int priority;          // Higher numbers mean higher priority
     private String deviceId;
+    private String type;  // create, update, delete
+    private String entityType;  // userProfile, address, delivery, etc.
+    private String entityId;
+    private Map<String, Object> data;
+    private boolean completed;
+    private boolean failed;
+    private String error;
     private int attempts;
-    private int maxAttempts;
-    private String conflictResolution;
-    
     private Timestamp createdAt;
     private Timestamp updatedAt;
+    private String authToken;
+    private String status;
+    private Timestamp completedAt;
     private Timestamp lastAttemptTime;
     private Timestamp nextAttemptTime;
-    private Timestamp completedAt;
-    
-    private Map<String, Object> data;            // The new data to apply
-    private Map<String, Object> previousVersion; // Original data for conflict resolution
-    
-    private Error error;
+    private int retryCount;
+    private int maxRetries = 3;
+    private String conflictResolution;
+    private Map<String, Object> previousVersion;
     
     // Default constructor required for Firestore
     public SyncOperation() {
+        this.data = new HashMap<>();
+        this.completed = false;
+        this.failed = false;
+        this.attempts = 0;
     }
     
     /**
-     * Create a basic sync operation
-     * 
-     * @param userId User ID
-     * @param operationType Operation type (create, update, delete)
-     * @param entityType Entity type (userProfile, address, delivery, etc.)
-     * @param entityId Entity ID
-     * @param data The data to sync
+     * Constructor with essential fields
      */
-    public SyncOperation(String userId, String operationType, String entityType, String entityId, Map<String, Object> data) {
+    public SyncOperation(String userId, String type, String entityType, String entityId, Map<String, Object> data) {
+        this();
         this.userId = userId;
-        this.operationType = operationType;
+        this.type = type;
         this.entityType = entityType;
         this.entityId = entityId;
-        this.data = data;
-        this.status = STATUS_PENDING;
-        this.priority = 0;
-        this.attempts = 0;
-        this.maxAttempts = 5;
-        this.conflictResolution = CONFLICT_RESOLUTION_SERVER_WINS;
-    }
-    
-    /**
-     * Create a complete sync operation
-     * 
-     * @param userId User ID
-     * @param operationType Operation type (create, update, delete)
-     * @param entityType Entity type (userProfile, address, delivery, etc.)
-     * @param entityId Entity ID
-     * @param data The data to sync
-     * @param previousVersion The original data for conflict resolution
-     * @param priority Priority level (higher means higher priority)
-     * @param conflictResolution Conflict resolution strategy
-     */
-    public SyncOperation(String userId, String operationType, String entityType, String entityId, 
-                         Map<String, Object> data, Map<String, Object> previousVersion, 
-                         int priority, String conflictResolution) {
-        this.userId = userId;
-        this.operationType = operationType;
-        this.entityType = entityType;
-        this.entityId = entityId;
-        this.data = data;
-        this.previousVersion = previousVersion;
-        this.status = STATUS_PENDING;
-        this.priority = priority;
-        this.attempts = 0;
-        this.maxAttempts = 5;
-        this.conflictResolution = conflictResolution;
-    }
-    
-    /**
-     * Nested class for error information
-     */
-    public static class Error {
-        private String code;
-        private String message;
-        private Timestamp timestamp;
-        
-        public Error() {
-        }
-        
-        public Error(String code, String message) {
-            this.code = code;
-            this.message = message;
-            this.timestamp = new Timestamp(new Date());
-        }
-        
-        // Getters and setters
-        public String getCode() {
-            return code;
-        }
-        
-        public void setCode(String code) {
-            this.code = code;
-        }
-        
-        public String getMessage() {
-            return message;
-        }
-        
-        public void setMessage(String message) {
-            this.message = message;
-        }
-        
-        public Date getTimestamp() {
-            return timestamp != null ? timestamp.toDate() : null;
-        }
-        
-        public void setTimestamp(Date timestamp) {
-            this.timestamp = timestamp != null ? new Timestamp(timestamp) : null;
-        }
+        this.data = data != null ? data : new HashMap<>();
     }
     
     // Getters and setters
@@ -163,12 +87,20 @@ public class SyncOperation {
         this.userId = userId;
     }
     
-    public String getOperationType() {
-        return operationType;
+    public String getDeviceId() {
+        return deviceId;
     }
     
-    public void setOperationType(String operationType) {
-        this.operationType = operationType;
+    public void setDeviceId(String deviceId) {
+        this.deviceId = deviceId;
+    }
+    
+    public String getType() {
+        return type;
+    }
+    
+    public void setType(String type) {
+        this.type = type;
     }
     
     public String getEntityType() {
@@ -187,28 +119,36 @@ public class SyncOperation {
         this.entityId = entityId;
     }
     
-    public String getStatus() {
-        return status;
+    public Map<String, Object> getData() {
+        return data;
     }
     
-    public void setStatus(String status) {
-        this.status = status;
+    public void setData(Map<String, Object> data) {
+        this.data = data != null ? data : new HashMap<>();
     }
     
-    public int getPriority() {
-        return priority;
+    public boolean isCompleted() {
+        return completed;
     }
     
-    public void setPriority(int priority) {
-        this.priority = priority;
+    public void setCompleted(boolean completed) {
+        this.completed = completed;
     }
     
-    public String getDeviceId() {
-        return deviceId;
+    public boolean isFailed() {
+        return failed;
     }
     
-    public void setDeviceId(String deviceId) {
-        this.deviceId = deviceId;
+    public void setFailed(boolean failed) {
+        this.failed = failed;
+    }
+    
+    public String getError() {
+        return error;
+    }
+    
+    public void setError(String error) {
+        this.error = error;
     }
     
     public int getAttempts() {
@@ -217,22 +157,6 @@ public class SyncOperation {
     
     public void setAttempts(int attempts) {
         this.attempts = attempts;
-    }
-    
-    public int getMaxAttempts() {
-        return maxAttempts;
-    }
-    
-    public void setMaxAttempts(int maxAttempts) {
-        this.maxAttempts = maxAttempts;
-    }
-    
-    public String getConflictResolution() {
-        return conflictResolution;
-    }
-    
-    public void setConflictResolution(String conflictResolution) {
-        this.conflictResolution = conflictResolution;
     }
     
     public Date getCreatedAt() {
@@ -251,99 +175,114 @@ public class SyncOperation {
         this.updatedAt = updatedAt != null ? new Timestamp(updatedAt) : null;
     }
     
-    public Date getLastAttemptTime() {
-        return lastAttemptTime != null ? lastAttemptTime.toDate() : null;
+    public String getAuthToken() {
+        return authToken;
     }
     
-    public void setLastAttemptTime(Date lastAttemptTime) {
-        this.lastAttemptTime = lastAttemptTime != null ? new Timestamp(lastAttemptTime) : null;
+    public void setAuthToken(String authToken) {
+        this.authToken = authToken;
     }
     
-    public Date getNextAttemptTime() {
-        return nextAttemptTime != null ? nextAttemptTime.toDate() : null;
+    /**
+     * Increment the attempt counter
+     */
+    public void incrementAttempts() {
+        this.attempts++;
     }
     
-    public void setNextAttemptTime(Date nextAttemptTime) {
-        this.nextAttemptTime = nextAttemptTime != null ? new Timestamp(nextAttemptTime) : null;
+    /**
+     * Get the operation type.
+     * @return String operation type
+     */
+    public String getOperationType() {
+        return type;
     }
     
-    public Date getCompletedAt() {
-        return completedAt != null ? completedAt.toDate() : null;
+    /**
+     * Check if the operation can be retried.
+     * @return boolean indicating if retry is possible
+     */
+    public boolean canRetry() {
+        return retryCount < maxRetries && (STATUS_FAILED.equals(status) || STATUS_RETRYING.equals(status));
     }
     
-    public void setCompletedAt(Date completedAt) {
-        this.completedAt = completedAt != null ? new Timestamp(completedAt) : null;
+    /**
+     * Get the conflict resolution strategy.
+     * @return String conflict resolution strategy
+     */
+    public String getConflictResolution() {
+        return conflictResolution;
     }
     
-    public Map<String, Object> getData() {
-        return data;
-    }
-    
-    public void setData(Map<String, Object> data) {
-        this.data = data;
-    }
-    
+    /**
+     * Get the previous version data.
+     * @return Map previous version data
+     */
     public Map<String, Object> getPreviousVersion() {
         return previousVersion;
     }
     
-    public void setPreviousVersion(Map<String, Object> previousVersion) {
-        this.previousVersion = previousVersion;
+    /**
+     * Get the next attempt time.
+     * @return Timestamp next attempt time
+     */
+    public Timestamp getNextAttemptTime() {
+        return nextAttemptTime;
     }
     
-    public Error getError() {
+    /**
+     * Set the operation status.
+     * @param status New status
+     */
+    public void setStatus(String status) {
+        this.status = status;
+    }
+    
+    /**
+     * Set the completion timestamp.
+     * @param completedAt Completion timestamp
+     */
+    public void setCompletedAt(Date completedAt) {
+        this.completedAt = completedAt != null ? new Timestamp(completedAt) : null;
+    }
+    
+    /**
+     * Set the last attempt timestamp.
+     * @param lastAttemptTime Last attempt timestamp
+     */
+    public void setLastAttemptTime(Date lastAttemptTime) {
+        this.lastAttemptTime = lastAttemptTime != null ? new Timestamp(lastAttemptTime) : null;
+    }
+    
+    /**
+     * Get the current status.
+     * @return String status
+     */
+    public String getStatus() {
+        return status;
+    }
+    
+    /**
+     * Get error code.
+     * @return String error code
+     */
+    public String getErrorCode() {
+        return error != null ? "error" : null;
+    }
+    
+    /**
+     * Get error message.
+     * @return String error message
+     */
+    public String getErrorMessage() {
         return error;
     }
     
-    public void setError(Error error) {
-        this.error = error;
-    }
-    
     /**
-     * Convenience method to check if this operation can be retried
-     * 
-     * @return True if the operation can be retried
+     * Get error timestamp.
+     * @return String error timestamp
      */
-    @Exclude
-    public boolean canRetry() {
-        return (status.equals(STATUS_FAILED) || status.equals(STATUS_RETRYING)) && attempts < maxAttempts;
-    }
-    
-    /**
-     * Convenience method to mark an operation as failed
-     * 
-     * @param errorCode Error code
-     * @param errorMessage Error message
-     */
-    @Exclude
-    public void markAsFailed(String errorCode, String errorMessage) {
-        this.status = STATUS_FAILED;
-        this.attempts++;
-        this.lastAttemptTime = new Timestamp(new Date());
-        
-        if (this.error == null) {
-            this.error = new Error();
-        }
-        
-        this.error.setCode(errorCode);
-        this.error.setMessage(errorMessage);
-        this.error.setTimestamp(new Date());
-        
-        // Set next retry time based on exponential backoff
-        if (this.attempts < this.maxAttempts) {
-            long backoffMillis = Math.min(1000 * (long) Math.pow(2, this.attempts), 1000 * 60 * 30); // Cap at 30 minutes
-            Date nextRetry = new Date(System.currentTimeMillis() + backoffMillis);
-            this.nextAttemptTime = new Timestamp(nextRetry);
-        }
-    }
-    
-    /**
-     * Convenience method to mark an operation as completed
-     */
-    @Exclude
-    public void markAsCompleted() {
-        this.status = STATUS_COMPLETED;
-        this.completedAt = new Timestamp(new Date());
-        this.updatedAt = new Timestamp(new Date());
+    public String getErrorTimestamp() {
+        return updatedAt != null ? updatedAt.toString() : null;
     }
 }

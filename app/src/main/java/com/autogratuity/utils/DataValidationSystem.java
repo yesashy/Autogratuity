@@ -2,28 +2,37 @@ package com.autogratuity.utils;
 
 import android.util.Log;
 
-import com.autogratuity.models.Address;
-import com.autogratuity.models.DeliveryData;
-import com.autogratuity.repositories.FirestoreRepository;
-import com.autogratuity.repositories.IFirestoreRepository;
+import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
+import com.autogratuity.data.repository.address.AddressRepository;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.schedulers.Schedulers;
+
 /**
- * System for validating delivery data before saving to Firestore
+ * System for validating delivery data before saving to repositories
+ * Updated to use domain repositories with RxJava
  */
 public class DataValidationSystem {
     private static final String TAG = "DataValidationSystem";
-    private final IFirestoreRepository repository;
+    private final DeliveryRepository deliveryRepository;
+    private final AddressRepository addressRepository;
+    private final CompositeDisposable disposables = new CompositeDisposable();
 
     /**
-     * Create a new DataValidationSystem with a Firestore repository
+     * Create a new DataValidationSystem with domain repositories
      *
-     * @param repository The repository to use for checking duplicates
+     * @param deliveryRepository The repository for delivery operations
+     * @param addressRepository The repository for address operations
      */
-    public DataValidationSystem(IFirestoreRepository repository) {
-        this.repository = repository;
+    public DataValidationSystem(DeliveryRepository deliveryRepository, AddressRepository addressRepository) {
+        this.deliveryRepository = deliveryRepository;
+        this.addressRepository = addressRepository;
     }
 
     /**
@@ -34,15 +43,15 @@ public class DataValidationSystem {
      * @param updateExisting Whether to update existing records
      * @return ValidationResult with statistics and validated deliveries
      */
-    public ValidationResult validateDeliveries(List<DeliveryData> deliveries, boolean skipDuplicates, boolean updateExisting) {
+    public ValidationResult validateDeliveries(List<Delivery> deliveries, boolean skipDuplicates, boolean updateExisting) {
         ValidationResult result = new ValidationResult();
-        List<DeliveryData> validatedDeliveries = new ArrayList<>();
+        List<Delivery> validatedDeliveries = new ArrayList<>();
 
-        for (DeliveryData delivery : deliveries) {
+        for (Delivery delivery : deliveries) {
             try {
                 // Validate address
                 if (delivery.getAddress() == null || 
-                    delivery.getAddress().getCoordinates() == null || 
+                    delivery.getAddress().getLocation() == null || 
                     delivery.getAddress().getFullAddress() == null || 
                     delivery.getAddress().getFullAddress().isEmpty()) {
                     
@@ -52,13 +61,9 @@ public class DataValidationSystem {
                     continue;
                 }
 
-                // Check for duplicates if needed - use direct repository cast for access to implementation
+                // Check for duplicates if needed
                 if (skipDuplicates || updateExisting) {
-                    // Use repository method to check for duplicates if available
-                    boolean isDuplicate = false;
-                    if (repository instanceof FirestoreRepository) {
-                        isDuplicate = ((FirestoreRepository) repository).checkForDuplicateDelivery(delivery);
-                    }
+                    boolean isDuplicate = checkForDuplicateDelivery(delivery);
                     
                     if (isDuplicate) {
                         if (skipDuplicates) {
@@ -95,11 +100,42 @@ public class DataValidationSystem {
      * @param delivery The delivery to check
      * @return true if it's a duplicate, false otherwise
      */
-    public boolean checkForDuplicateDelivery(DeliveryData delivery) {
-        if (repository instanceof FirestoreRepository) {
-            return ((FirestoreRepository) repository).checkForDuplicateDelivery(delivery);
+    public boolean checkForDuplicateDelivery(Delivery delivery) {
+        try {
+            // Try to find a delivery with the same address
+            if (delivery.getAddress() != null && 
+                delivery.getAddress().getFullAddress() != null) {
+                
+                String normalizedAddress = addressRepository.normalizeAddress(
+                        delivery.getAddress().getFullAddress());
+                
+                Address existingAddress = addressRepository.findAddressByNormalizedAddress(normalizedAddress)
+                        .blockingGet();
+                
+                if (existingAddress != null) {
+                    // Check if there's a delivery with this address
+                    List<Delivery> existingDeliveries = deliveryRepository.getDeliveriesByAddress(
+                            existingAddress.getAddressId())
+                            .blockingGet();
+                    
+                    return !existingDeliveries.isEmpty();
+                }
+            }
+            
+            return false;
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking for duplicate delivery: " + e.getMessage());
+            return false;
         }
-        return false;
+    }
+    
+    /**
+     * Clean up resources when no longer needed
+     */
+    public void dispose() {
+        if (disposables != null && !disposables.isDisposed()) {
+            disposables.dispose();
+        }
     }
 
     /**
@@ -111,7 +147,7 @@ public class DataValidationSystem {
         private int duplicateCount = 0;
         private int invalidCount = 0;
         private List<String> warnings = new ArrayList<>();
-        private List<DeliveryData> validatedDeliveries = new ArrayList<>();
+        private List<Delivery> validatedDeliveries = new ArrayList<>();
 
         // Getters
         public int getNewCount() {
@@ -134,7 +170,7 @@ public class DataValidationSystem {
             return warnings;
         }
 
-        public List<DeliveryData> getValidatedDeliveries() {
+        public List<Delivery> getValidatedDeliveries() {
             return validatedDeliveries;
         }
 
@@ -159,7 +195,7 @@ public class DataValidationSystem {
             warnings.add(warning);
         }
 
-        public void setValidatedDeliveries(List<DeliveryData> deliveries) {
+        public void setValidatedDeliveries(List<Delivery> deliveries) {
             this.validatedDeliveries = deliveries;
         }
     }
