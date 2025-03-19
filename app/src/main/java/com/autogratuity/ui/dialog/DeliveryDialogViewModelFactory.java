@@ -7,24 +7,42 @@ import androidx.lifecycle.ViewModelProvider;
 import com.autogratuity.data.repository.address.AddressRepository;
 import com.autogratuity.data.repository.core.RepositoryProvider;
 import com.autogratuity.data.repository.delivery.DeliveryRepository;
+import com.autogratuity.ui.common.RepositoryViewModelFactory;
 
 /**
  * Factory for creating DeliveryDialogViewModel instances.
- * This factory ensures that the ViewModel is created with the correct repositories.
+ * This factory uses the standardized RepositoryViewModelFactory pattern.
  */
 public class DeliveryDialogViewModelFactory implements ViewModelProvider.Factory {
 
+    private final RepositoryViewModelFactory delegateFactory;
+
     /**
-     * Create a new instance of DeliveryDialogViewModel with the required repositories
+     * Constructor that creates a specialized factory for DeliveryDialogViewModel
+     */
+    public DeliveryDialogViewModelFactory() {
+        // Use the builder pattern from RepositoryViewModelFactory
+        this.delegateFactory = RepositoryViewModelFactory.builder()
+                .withDeliveryRepository(RepositoryProvider.getDeliveryRepository())
+                .withAddressRepository(RepositoryProvider.getAddressRepository())
+                .build();
+    }
+
+    /**
+     * Delegate creation to the standard RepositoryViewModelFactory
      */
     @NonNull
     @Override
     public <T extends ViewModel> T create(@NonNull Class<T> modelClass) {
-        if (modelClass.isAssignableFrom(DeliveryDialogViewModel.class)) {
-            DeliveryRepository deliveryRepository = RepositoryProvider.getDeliveryRepository();
-            AddressRepository addressRepository = RepositoryProvider.getAddressRepository();
-            return (T) new DeliveryDialogViewModel(deliveryRepository, addressRepository);
-        }
-        throw new IllegalArgumentException("Unknown ViewModel class: " + modelClass.getName());
+        return delegateFactory.create(modelClass);
+    }
+
+    /**
+     * Static factory method to create a new instance
+     * 
+     * @return New factory instance
+     */
+    public static DeliveryDialogViewModelFactory create() {
+        return new DeliveryDialogViewModelFactory();
     }
 }

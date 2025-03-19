@@ -18,6 +18,7 @@ import androidx.lifecycle.ViewModelProvider;
 import com.android.billingclient.api.BillingResult;
 import com.android.billingclient.api.Purchase;
 import com.autogratuity.data.model.SubscriptionStatus;
+import com.autogratuity.data.repository.core.RepositoryProvider;
 import com.autogratuity.ui.common.RepositoryViewModelFactory;
 import com.autogratuity.ui.subscription.SubscriptionViewModel;
 import com.autogratuity.utils.SubscriptionManager;
@@ -67,7 +68,9 @@ public class ProSubscribeActivity extends AppCompatActivity implements com.andro
                 .get(SubscriptionViewModel.class);
         
         // Initialize subscription manager
-        subscriptionManager = SubscriptionManager.getInstance(this);
+        subscriptionManager = SubscriptionManager.getInstance(this,
+                RepositoryProvider.getSubscriptionRepository(),
+                RepositoryProvider.getPreferenceRepository());
         subscriptionManager.setListener(this);
         
         // Set up toolbar

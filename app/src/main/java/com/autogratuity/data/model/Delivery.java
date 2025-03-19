@@ -513,6 +513,15 @@ public class Delivery {
         return deliveryId;
     }
     
+    /**
+     * Get the unique identifier for this delivery
+     * @return String ID
+     */
+    @Exclude
+    public String getId() {
+        return deliveryId;
+    }
+    
     public void setDeliveryId(String deliveryId) {
         this.deliveryId = deliveryId;
     }
@@ -566,6 +575,16 @@ public class Delivery {
     }
     
     public Status getStatus() {
+        return status;
+    }
+    
+    /**
+     * Get flags for this delivery (wrapper for status)
+     * Used by export and reporting functions
+     * @return Status object containing flags
+     */
+    @Exclude
+    public Status getFlags() {
         return status;
     }
     

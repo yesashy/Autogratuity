@@ -4,6 +4,8 @@ import android.content.Context;
 import android.util.Log;
 
 import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Address.Location;
+import com.autogratuity.data.model.Address.SearchFields;
 import com.autogratuity.data.model.Coordinates;
 import com.autogratuity.data.model.Delivery;
 import com.autogratuity.data.model.Amounts;
@@ -11,6 +13,7 @@ import com.autogratuity.data.model.Metadata;
 import com.autogratuity.data.model.Reference;
 import com.autogratuity.data.model.Times;
 import com.autogratuity.data.model.Status;
+import com.autogratuity.data.model.converter.ModelConverters;
 import com.autogratuity.data.repository.address.AddressRepository;
 import com.autogratuity.data.repository.delivery.DeliveryRepository;
 import com.autogratuity.data.repository.sync.SyncRepository;
@@ -213,7 +216,7 @@ public class GeoJsonImportUtil {
             // Create address
             final Address address = new Address();
             address.setFullAddress(name);
-            address.setLocation(coordinates);
+            address.setLocation(ModelConverters.toLocation(coordinates));
             
             // Normalize address and create search terms
             String normalizedAddress = addressRepository.normalizeAddress(name);
@@ -231,7 +234,9 @@ public class GeoJsonImportUtil {
                     searchTerms.add(part);
                 }
             }
-            address.setSearchTerms(searchTerms);
+            SearchFields searchFields = new SearchFields();
+            searchFields.setSearchTerms(searchTerms);
+            address.setSearchFields(searchFields);
             
             // Try to extract order ID from name or description
             String orderId = extractOrderId(name);
@@ -261,37 +266,36 @@ public class GeoJsonImportUtil {
             // Set address as the reference
             Reference reference = new Reference();
             reference.setAddressId(null); // Will be set when address is saved
-            reference.setAddressText(address.getFullAddress());
-            delivery.setReference(reference);
-            delivery.setAddress(address);
+            reference.setPlatformOrderId(orderId); // Setting platform order ID
+            delivery.setReference(ModelConverters.toDeliveryReference(reference)); // Convert using ModelConverters
+            delivery.setAddress(ModelConverters.toSimpleAddress(address)); // Convert using ModelConverters
             
             // Set amounts
             Amounts amounts = new Amounts();
             amounts.setTipAmount(tipAmount);
-            amounts.setDeliveryAmount(0.0); // Unknown from GeoJSON
-            amounts.setOrderAmount(0.0); // Unknown from GeoJSON
-            delivery.setAmounts(amounts);
+            amounts.setBaseAmount(0.0); // Unknown from GeoJSON
+            amounts.setEstimatedPay(0.0); // Unknown from GeoJSON
+            delivery.setAmounts(ModelConverters.toDeliveryAmounts(amounts)); // Convert using ModelConverters
             
             // Set metadata
             Metadata metadata = new Metadata();
             metadata.setCreatedAt(new Date());
             metadata.setSource("geojson_import");
-            metadata.setImportSource("GeoJSON");
             if (orderId != null) {
-                metadata.setOrderId(orderId);
+                metadata.setImportId(orderId);
             }
-            delivery.setMetadata(metadata);
+            delivery.setMetadata(ModelConverters.toDeliveryMetadata(metadata)); // Convert using ModelConverters
             
             // Set times
             Times times = new Times();
-            times.setCreatedAt(new Date());
-            delivery.setTimes(times);
+            times.setOrderedAt(new Date());
+            delivery.setTimes(ModelConverters.toDeliveryTimes(times)); // Convert using ModelConverters
             
             // Set status
             Status status = new Status();
             status.setTipped(tipAmount > 0);
             status.setCompleted(true);
-            delivery.setStatus(status);
+            delivery.setStatus(ModelConverters.toDeliveryStatus(status)); // Convert using ModelConverters
             
             // Set notes
             delivery.setNotes(description);

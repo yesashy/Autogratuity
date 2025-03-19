@@ -1,5 +1,10 @@
 # Claude Segment Implementation Plan
 
+# IMPORTANT NOTE TO CLAUDE: 
+If needed, cross validate by examining "Build Errors.md" -- it is the most up to date error log of the android studio build. 
+# IMPORTANT NOTE TO CLAUDE (2):
+ Sometimes legacy files are not accounted for or lost during the implementation of new architecture; if you genuinely think a file does not exist, VALIDATE by searching through "C:\Users\ReifiedAsh\AndroidStudioProjects\Autogratuity\overhaul\notes\CURRENT CODEBASE STRUCTURE - B.md" and "C:\Users\ReifiedAsh\AndroidStudioProjects\Autogratuity\overhaul\notes\CURRENT CODEBASE STRUCTURE - A.MD"
+
 ## Overview
 
 This document outlines a strategic approach to implementing the Master Checklist tasks using Claude's code editing capabilities in 4-minute intervention segments. Each segment represents a focused, achievable unit of work that can be completed within approximately 4 minutes while delivering meaningful progress toward resolving the architectural issues.
@@ -11,492 +16,344 @@ This document outlines a strategic approach to implementing the Master Checklist
 3. **Incremental Value**: Each segment delivers meaningful progress even if other segments are delayed
 4. **Dependency Management**: Segments are ordered to respect dependencies between changes
 5. **Validation**: Each segment includes clear success criteria for validation
+6. **Time Constraint**: Each segment is designed to be completable within a 4-minute timeframe
 
-## Phase 1: Immediate Build Error Resolution
+## Completed Segments (March 18, 2025)
 
-These segments address critical build errors to restore compilation and provide the foundation for further architectural improvements.
+### Phase A: Critical Build Error Resolution ✅
 
-### ✅ Segment 1-A: Fix SyncOperation Error Method Duplication (Fixed - March 18, 2025)
+✅ Segment A-1.1: RxJava Foundation
+✅ Segment A-1.2: RxJava ViewModels
+✅ Segment A-2: Repository Access Standardization
+✅ Segment A-3: Capture Processor Standardization
+✅ Segment A-4: Resource Reference Resolution
 
-**Objective**: Resolve the method duplication error in SyncOperation.java by renaming getError() to getErrorInfo()
+### Phase B: Type System Coherence ✅
+
+✅ Segment B-1: Model Converter Foundation
+✅ Segment B-2: Import Utility Type Fixes
+✅ Segment B-3: Address Method Implementation
+✅ Segment B-4: Delivery Method Implementation
+
+### Phase C: Architectural Foundation ✅
+
+✅ Segment C-1: Error Information Standardization
+✅ Segment C-2: UI State Representation
+✅ Segment C-3: BaseViewModel Enhancement
+✅ Segment C-4: ViewModel Factory Standardization
+
+### Phase D: Repository Standardization ✅
+
+✅ Segment D-1: Cache Strategy Interface
+✅ Segment D-2: Repository Error Handling
+✅ Segment D-3: ConfigRepository Enhancement
+✅ Segment D-4: Repository RxJava Integration
+
+## Optimized Remaining Segments
+
+### First Wave (Critical Foundational Improvements)
+
+✅ ### Segment R-1: Repository Interface Contract Standard
+
+**Objective**: Define clear, standardized contract for all repositories
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/model/SyncOperation.java`
+- Create `app/src/main/java/com/autogratuity/data/repository/core/RepositoryContract.java`
+- Update `app/src/main/java/com/autogratuity/data/repository/core/DataRepository.java`
 
 **Changes**:
-1. Rename `getError()` method to `getErrorInfo()`
-2. Update method documentation to reflect the change
+1. Create interface defining standard method signatures for repositories
+2. Define consistent naming conventions (get*, find*, update*, delete*)
+3. Document standard patterns with javadoc comments
 
-**Expected Outcome**: Method duplication error resolved in SyncOperation.java
+**Expected Outcome**: Standardized repository API contract that can be consistently applied
 
-### Segment 1-B: Update SyncOperation Callers
+**Validation**: All repositories follow the contract pattern, consistent method names
 
-**Objective**: Update all calls to the renamed getErrorInfo() method
+✅ ### Segment RP-1: RxJava-to-LiveData Transformation
+
+**Objective**: Create standardized approach for transforming RxJava streams to LiveData
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
-- Other files calling the method (identified through code search)
+- Create `app/src/main/java/com/autogratuity/ui/common/LiveDataTransformer.java`
+- Update `app/src/main/java/com/autogratuity/ui/common/BaseViewModel.java`
 
 **Changes**:
-1. Replace all `operation.getError()` calls with `operation.getErrorInfo()`
-2. Update any variable names or comments referring to the method
+1. Create utility methods for Single, Observable, and Completable transformation
+2. Add state tracking during transformations (loading, success, error)
+3. Standardize error propagation during transformations
 
-**Expected Outcome**: All callers updated to use the renamed method
+**Expected Outcome**: Consistent pattern for exposing repository data as LiveData
 
-### ✅ Segment 1-C: Fix AggregateQuery Parameter (Fixed - March 18, 2025)
+**Validation**: Transformations handle loading states and errors consistently
 
-**Objective**: Add the required AggregateSource.SERVER parameter to count().get() calls
+✅ ### Segment E-1: Basic Retry Mechanism
+
+**Objective**: Create focused retry mechanism class with exponential backoff
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
+- Created `app/src/main/java/com/autogratuity/data/repository/sync/RetryWithBackoff.java`
+- Updated `app/src/main/java/com/autogratuity/data/model/SyncOperation.java`
+- Updated `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
 
 **Changes**:
-1. Add `com.google.firebase.firestore.Source` import
-2. Change `get(com.google.firebase.firestore.AggregateSource.SERVER)` to `get(Source.SERVER)` for Query.get() calls
+1. Created RetryWithBackoff class with key parameters (maxRetries, backoffFactor)
+2. Implemented exponential backoff calculation with jitter
+3. Added smart error type detection for retryable errors
+4. Enhanced SyncOperation with retry count tracking and error classification
+5. Integrated RetryWithBackoff with SyncRepositoryImpl
 
-**Expected Outcome**: Method parameter mismatch error resolved
+**Expected Outcome**: Focused retry mechanism ready for integration
 
-### ✅ Segment 1-D: Create DeliveryDetailDialog Layout
+**Validation**: RetryWithBackoff correctly calculates backoff times and integrates with sync operations
 
-**Objective**: Create the missing dialog_delivery_detail.xml layout file
+✅ ### Segment F-1: Fragment Loading State
+
+**Objective**: Apply ViewState pattern to DeliveriesFragment
 
 **Files**:
-- Create `app/src/main/res/layout/dialog_delivery_detail.xml`
+- Update `app/src/main/java/com/autogratuity/ui/delivery/DeliveriesFragment.java`
+- Update `app/src/main/java/com/autogratuity/ui/delivery/DeliveryViewModel.java`
+- Update `app/src/main/res/layout/fragment_deliveries.xml`
 
 **Changes**:
-1. Create new XML layout file with Material Design components
-2. Include all required view IDs:
-   - update_button
-   - delete_button
-   - close_button
-3. Structure layout according to application design patterns
+1. Added ViewState observation to DeliveriesFragment
+2. Added deliveriesStateLiveData to DeliveryViewModel
+3. Updated loadDeliveries and observeDeliveries to use ViewState for state handling
+4. Implemented consistent handling of loading, success, and error states
 
-**Expected Outcome**: Missing resource error resolved for dialog_delivery_detail.xml
+**Expected Outcome**: DeliveriesFragment with proper loading state visualization
 
-### Segment 1-E: Fix FaqViewModel RxJava Issues
+**Validation**: Fragment properly shows loading, error, and content states
 
-**Objective**: Correct the RxJava chain issues in FaqViewModel
+### Second Wave (Building on Foundation)
+
+✅ ### Segment E-2: Sync Operation Retry Integration
+
+**Objective**: Integrate RetryWithBackoff into SyncOperations
 
 **Files**:
-- `app/src/main/java/com/autogratuity/ui/faq/FaqViewModel.java`
+- Updated `app/src/main/java/com/autogratuity/data/model/SyncOperation.java`
+- Updated `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
 
 **Changes**:
-1. Wrap synchronous method calls in Single.fromCallable()
-2. Fix all subscribeOn() and observeOn() chain issues
-3. Ensure proper imports for RxJava types
+1. Enhanced markAsFailed() to use RetryWithBackoff for error type detection and retry scheduling
+2. Improved canRetry() logic to use RetryWithBackoff's shouldRetry method
+3. Added detailed retry logging and better error categorization
+4. Added adaptive retry scheduling based on error types
+5. Enhanced error info with retry details for better visibility
 
-**Expected Outcome**: Boolean/String cannot be dereferenced errors resolved
+**Expected Outcome**: SyncOperations with proper retry behavior
 
-### Segment 1-F: Fix RepositoryProvider Access
+**Validation**: Failed operations retry with increasing delays based on error type
 
-**Objective**: Update incorrect RepositoryProvider.getInstance() calls
+✅ ### Segment RP-2: Unified Disposable Management
+
+**Objective**: Create standardized disposable lifecycle management
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
-- `app/src/main/java/com/autogratuity/workers/SyncWorker.java`
-- Other files with the pattern (identified through code search)
+- Created `app/src/main/java/com/autogratuity/ui/common/DisposableLifecycleManager.java`
+- Updated `app/src/main/java/com/autogratuity/ui/common/BaseViewModel.java`
 
 **Changes**:
-1. Replace `RepositoryProvider.getInstance(context).getSyncRepository()` with `RepositoryProvider.getSyncRepository()`
-2. Update similar patterns for other repository types
+1. Created DisposableLifecycleManager with comprehensive tracking and disposal of subscriptions
+2. Added lifecycle-aware disposal methods with binding to lifecycle events
+3. Updated BaseViewModel to use standardized disposal through disposableManager
+4. Added tag-based grouping of disposables for more granular control
+5. Enhanced subscription management with simplified syntax methods
 
-**Expected Outcome**: Cannot find method getInstance(Context) error resolved
+**Expected Outcome**: Consistent subscription lifecycle management
 
-## Phase 2: Core Architecture Standardization
+**Validation**: Proper disposal of subscriptions during ViewModel lifecycle changes
 
-These segments establish standardized architectural patterns that will form the foundation for subsequent updates.
+✅ ### Segment R-2: Repository Method Tracing
 
-### Segment 2-A: Create ErrorInfo Standard Class
-
-**Objective**: Create or enhance the ErrorInfo class as the standard error representation
+**Objective**: Add standardized performance tracing to repositories
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/model/ErrorInfo.java`
+- Created `app/src/main/java/com/autogratuity/data/repository/core/TracingRepositoryDecorator.java`
+- Updated `app/src/main/java/com/autogratuity/data/repository/core/RepositoryProvider.java`
 
 **Changes**:
-1. Create comprehensive ErrorInfo class with standardized fields:
-   - error code
-   - message
-   - timestamp
-   - severity
-   - recovery action
-2. Add utility methods for common error handling scenarios
-3. Include proper documentation
+1. Created TracingRepositoryDecorator using decorator pattern with Java Proxy
+2. Added comprehensive performance timing metrics (min, max, avg, count, error count)
+3. Implemented standard log format for repository operations with threshold-based logging levels
+4. Added detailed parameter and result logging for debugging
+5. Integrated with RepositoryProvider to apply tracing decorators to all repositories
+6. Added statistics collection and reporting capabilities
 
-**Expected Outcome**: Standardized error representation available for all components
+**Expected Outcome**: Ability to trace and profile repository operations
 
-### Segment 2-B: Create RxJava Threading Standard
+**Validation**: Operation timing data is logged for repository calls and performance statistics are available for analysis
 
-**Objective**: Establish standard threading patterns for RxJava operations
+✅ ### Segment F-2: Fragment Error Handling
+
+**Objective**: Create standardized error handling in fragments
 
 **Files**:
-- Create `app/src/main/java/com/autogratuity/data/util/RxSchedulers.java`
+- Created `app/src/main/java/com/autogratuity/ui/common/ErrorDialogFragment.java`
+- Updated `app/src/main/java/com/autogratuity/ui/delivery/DeliveriesFragment.java`
 
 **Changes**:
-1. Create utility class with standard scheduler patterns:
-   - io() - for database and network operations
-   - computation() - for CPU-intensive work
-   - ui() - for UI operations
-2. Add composition methods for standard chains
-3. Include comprehensive documentation of threading patterns
+1. Created reusable error dialog with primary and secondary action buttons
+2. Implemented standardized error message formatting with icon-based error types
+3. Added support for both Throwable and ErrorInfo error models
+4. Implemented builder pattern for easy dialog creation
+5. Integrated error dialog with DeliveriesFragment for consistent presentation
+6. Added retry functionality for error recovery
 
-**Expected Outcome**: Standardized approach to threading across the application
+**Expected Outcome**: Consistent error handling and presentation in UI
 
-### Segment 2-C: Create UI State Representation
+**Validation**: Error states show appropriate messages and recovery options with retry functionality
 
-**Objective**: Establish standard UI state classes for consistent state management
+### Third Wave (Component-Specific Improvements)
+
+✅ ### Segment E-3: Conflict Detection Foundation
+
+**Objective**: Create conflict detection infrastructure
 
 **Files**:
-- Create `app/src/main/java/com/autogratuity/ui/common/state/ViewState.java`
-- Create related state classes (Loading, Success, Error, etc.)
+- Created `app/src/main/java/com/autogratuity/data/repository/sync/ConflictDetector.java`
+- Created `app/src/main/java/com/autogratuity/data/repository/sync/TimestampConflictDetector.java`
+- Updated `app/src/main/java/com/autogratuity/data/model/SyncOperation.java`
 
 **Changes**:
-1. Create generic ViewState class with specific subclasses:
-   - ViewState.Loading - for loading states
-   - ViewState.Success<T> - for success states with data
-   - ViewState.Error - for error states
-2. Add utility methods for state transformations
-3. Include documentation and examples
+1. Created ConflictDetector interface with methods for detecting conflicts and determining resolution strategies
+2. Implemented TimestampConflictDetector with comprehensive timestamp and field-based conflict detection
+3. Added conflict status tracking, type identification, and detailed information to SyncOperation
+4. Enhanced SyncOperation with markAsConflicted method and conflict resolution integration
+5. Added proper conflict metadata and reporting mechanisms
 
-**Expected Outcome**: Standardized UI state management available for ViewModels
+**Expected Outcome**: Infrastructure for detecting sync conflicts
 
-### Segment 2-D: Enhance BaseViewModel
+**Validation**: Conflict detection identifies overlapping updates and provides detailed conflict information
 
-**Objective**: Update BaseViewModel with standardized patterns
+### Segment F-3: Adapter DiffUtil Implementation
+
+**Objective**: Optimize adapter updates with DiffUtil
 
 **Files**:
-- `app/src/main/java/com/autogratuity/ui/common/BaseViewModel.java`
+- Create `app/src/main/java/com/autogratuity/ui/delivery/adapters/DeliveryDiffCallback.java`
+- Update `app/src/main/java/com/autogratuity/ui/delivery/adapters/DeliveriesAdapter.java`
 
 **Changes**:
-1. Add standard error handling methods using ErrorInfo
-2. Implement consistent loading state management
-3. Standardize disposable management
-4. Add lifecycle integration utilities
+1. Create DiffUtil.Callback implementation for deliveries
+2. Implement item comparison logic
+3. Replace notifyDataSetChanged with DiffUtil
 
-**Expected Outcome**: Enhanced BaseViewModel that enforces architectural standards
+**Expected Outcome**: Efficient adapter updates with animation support
 
-### Segment 2-E: Create Cache Strategy Interface
+**Validation**: List updates with smooth animations instead of full rebinds
 
-**Objective**: Define standard caching approach for repositories
+✅ ### Segment R-3: Firestore Query Standardization
+
+**Objective**: Create standardized query building utilities
 
 **Files**:
-- Create `app/src/main/java/com/autogratuity/data/repository/core/CacheStrategy.java`
-- Create implementations (MemoryCache, DiskCache, etc.)
+- Created `app/src/main/java/com/autogratuity/data/repository/core/FirestoreQueryException.java`
+- Created `app/src/main/java/com/autogratuity/data/repository/core/QueryBuilder.java`
+- Updated `app/src/main/java/com/autogratuity/data/repository/core/FirestoreRepository.java`
 
 **Changes**:
-1. Create interface defining caching contract
-2. Implement memory and disk cache strategies
-3. Add cache invalidation methods
-4. Include documentation of caching patterns
+1. Created QueryBuilder with comprehensive fluent interface for all Firestore query operations
+2. Implemented robust validation and error handling for all query components
+3. Created FirestoreQueryException class with detailed error types and messages
+4. Added helper methods for common query patterns (date ranges, user filtering, text search)
+5. Updated FirestoreRepository to use QueryBuilder for standardized query construction
+6. Added queryBuilder and userQueryBuilder factory methods to FirestoreRepository
 
-**Expected Outcome**: Standardized caching approach available for repositories
+**Expected Outcome**: Standardized query construction across repositories
 
-## Phase 3: Repository Implementation Standardization
+**Validation**: Repositories use QueryBuilder instead of ad-hoc queries and benefit from consistent error handling
 
-These segments apply architectural standards to repository implementations, working systematically through each repository.
+### Segment RP-3: Backpressure Strategy Definition
 
-### Segment 3-A: Update ConfigRepository Error Handling
-
-**Objective**: Implement standardized error handling in ConfigRepository
+**Objective**: Define standard approaches for handling backpressure
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/repository/config/ConfigRepositoryImpl.java`
+- Create `app/src/main/java/com/autogratuity/data/util/BackpressureHandler.java`
+- Update `app/src/main/java/com/autogratuity/data/repository/core/FirestoreRepository.java`
 
 **Changes**:
-1. Update error handling to use ErrorInfo standard
-2. Standardize error propagation in RxJava chains
-3. Add comprehensive error logging
+1. Create utility with standard backpressure strategies
+2. Implement rate limiting for high-frequency operations
+3. Document usage patterns
 
-**Expected Outcome**: ConfigRepository with standardized error handling
+**Expected Outcome**: Consistent handling of rapid data emission
 
-### Segment 3-B: Update ConfigRepository Caching
+**Validation**: No overwhelming of UI thread during data-intensive operations
 
-**Objective**: Implement standardized caching in ConfigRepository
+### Fourth Wave (Advanced Integration)
 
-**Files**:
-- `app/src/main/java/com/autogratuity/data/repository/config/ConfigRepositoryImpl.java`
+### Segment E-4: Entity-Specific Conflict Resolution
 
-**Changes**:
-1. Apply standard CacheStrategy for configuration data
-2. Implement consistent cache invalidation
-3. Add cache metrics logging
-
-**Expected Outcome**: ConfigRepository with standardized caching
-
-### Segment 3-C: Update ConfigRepository RxJava Integration
-
-**Objective**: Standardize RxJava patterns in ConfigRepository
+**Objective**: Implement resolution strategies for different entity types
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/repository/config/ConfigRepositoryImpl.java`
-
-**Changes**:
-1. Apply standard threading model using RxSchedulers
-2. Standardize reactive types (Single, Observable, Completable)
-3. Add proper error handling in reactive chains
-
-**Expected Outcome**: ConfigRepository with standardized reactive patterns
-
-### Segment 3-D: Update DeliveryRepository Error Handling
-
-**Objective**: Implement standardized error handling in DeliveryRepository
-
-**Files**:
-- `app/src/main/java/com/autogratuity/data/repository/delivery/DeliveryRepositoryImpl.java`
-
-**Changes**:
-1. Update error handling to use ErrorInfo standard
-2. Standardize error propagation in RxJava chains
-3. Add comprehensive error logging
-
-**Expected Outcome**: DeliveryRepository with standardized error handling
-
-### Segment 3-E: Update DeliveryRepository Caching
-
-**Objective**: Implement standardized caching in DeliveryRepository
-
-**Files**:
-- `app/src/main/java/com/autogratuity/data/repository/delivery/DeliveryRepositoryImpl.java`
-
-**Changes**:
-1. Apply standard CacheStrategy for delivery data
-2. Implement consistent cache invalidation
-3. Add cache metrics logging
-
-**Expected Outcome**: DeliveryRepository with standardized caching
-
-### Segment 3-F: Update DeliveryRepository RxJava Integration
-
-**Objective**: Standardize RxJava patterns in DeliveryRepository
-
-**Files**:
-- `app/src/main/java/com/autogratuity/data/repository/delivery/DeliveryRepositoryImpl.java`
-
-**Changes**:
-1. Apply standard threading model using RxSchedulers
-2. Standardize reactive types (Single, Observable, Completable)
-3. Add proper error handling in reactive chains
-
-**Expected Outcome**: DeliveryRepository with standardized reactive patterns
-
-## Phase 4: ViewModel Implementation Standardization
-
-These segments apply architectural standards to ViewModels, working systematically through each feature area.
-
-### Segment 4-A: Update DeliveryViewModel
-
-**Objective**: Apply standard patterns to DeliveryViewModel
-
-**Files**:
-- `app/src/main/java/com/autogratuity/ui/delivery/DeliveryViewModel.java`
-
-**Changes**:
-1. Update to use enhanced BaseViewModel capabilities
-2. Apply standard ViewState pattern for state management
-3. Implement consistent error handling
-4. Standardize disposable management
-
-**Expected Outcome**: DeliveryViewModel with standardized architectural patterns
-
-### Segment 4-B: Update DeliveryDialogViewModel
-
-**Objective**: Apply standard patterns to DeliveryDialogViewModel
-
-**Files**:
-- `app/src/main/java/com/autogratuity/ui/dialog/DeliveryDialogViewModel.java`
-
-**Changes**:
-1. Update to use enhanced BaseViewModel capabilities
-2. Apply standard ViewState pattern for state management
-3. Implement consistent error handling
-4. Standardize disposable management
-
-**Expected Outcome**: DeliveryDialogViewModel with standardized architectural patterns
-
-### Segment 4-C: Update AddressViewModel
-
-**Objective**: Apply standard patterns to AddressViewModel
-
-**Files**:
-- `app/src/main/java/com/autogratuity/ui/address/AddressViewModel.java`
-
-**Changes**:
-1. Update to use enhanced BaseViewModel capabilities
-2. Apply standard ViewState pattern for state management
-3. Implement consistent error handling
-4. Standardize disposable management
-
-**Expected Outcome**: AddressViewModel with standardized architectural patterns
-
-### Segment 4-D: Update MainViewModel
-
-**Objective**: Apply standard patterns to MainViewModel
-
-**Files**:
-- `app/src/main/java/com/autogratuity/ui/main/MainViewModel.java`
-
-**Changes**:
-1. Update to use enhanced BaseViewModel capabilities
-2. Apply standard ViewState pattern for state management
-3. Implement consistent error handling
-4. Standardize disposable management
-
-**Expected Outcome**: MainViewModel with standardized architectural patterns
-
-## Phase 5: Synchronization Engine Enhancements
-
-These segments improve the synchronization engine, addressing specific aspects in manageable increments.
-
-### Segment 5-A: Implement Exponential Backoff Retry
-
-**Objective**: Create robust retry mechanism with exponential backoff
-
-**Files**:
-- `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
-- Create `app/src/main/java/com/autogratuity/data/util/RetryStrategy.java`
-
-**Changes**:
-1. Create RetryStrategy utility with exponential backoff implementation
-2. Update SyncRepositoryImpl to use standardized retry approach
-3. Add proper error propagation and logging
-
-**Expected Outcome**: Robust retry mechanism for sync operations
-
-### Segment 5-B: Improve Conflict Resolution
-
-**Objective**: Standardize conflict resolution across entity types
-
-**Files**:
-- `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
 - Create `app/src/main/java/com/autogratuity/data/repository/sync/ConflictResolver.java`
+- Update `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
 
 **Changes**:
-1. Create ConflictResolver utility for standardized conflict handling
-2. Implement entity-specific resolution strategies
-3. Add proper versioning for conflict detection
+1. Create ConflictResolver with entity-specific strategies
+2. Implement last-write-wins and field-merge strategies
+3. Integrate with SyncRepositoryImpl.processUpdateOperation()
 
-**Expected Outcome**: Consistent conflict resolution across all entity types
+**Expected Outcome**: Proper conflict resolution during sync
 
-### Segment 5-C: Enhance Offline Operation Queueing
+**Validation**: Conflicts are resolved with appropriate strategies by entity type
 
-**Objective**: Improve the reliability of offline operation queueing
+### Segment F-4: ViewBinding Standardization
+
+**Objective**: Convert adapters to use ViewBinding
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
+- Update `app/src/main/java/com/autogratuity/ui/delivery/adapters/DeliveriesAdapter.java`
+- Update `app/src/main/java/com/autogratuity/ui/address/adapters/AddressesAdapter.java`
 
 **Changes**:
-1. Enhance persistence of queued operations
-2. Improve recovery mechanisms for failed operations
-3. Add operation prioritization
-4. Implement queue monitoring and metrics
+1. Convert from findViewById to ViewBinding
+2. Fix static context references
+3. Standardize binding pattern across adapters
 
-**Expected Outcome**: More reliable offline operation handling
+**Expected Outcome**: Efficient, type-safe view binding in adapters
 
-### Segment 5-D: Implement Operation Batching
+**Validation**: No findViewById calls in adapter code
 
-**Objective**: Optimize sync operations through batching
+### Segment R-4: Repository Dependency Decoupling
+
+**Objective**: Resolve circular dependencies between repositories
 
 **Files**:
-- `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
-- Create `app/src/main/java/com/autogratuity/data/repository/sync/BatchProcessor.java`
+- Update `app/src/main/java/com/autogratuity/data/repository/config/ConfigRepositoryImpl.java`
+- Update `app/src/main/java/com/autogratuity/data/repository/sync/SyncRepositoryImpl.java`
+- Create `app/src/main/java/com/autogratuity/data/repository/core/RepositoryEventBus.java`
 
 **Changes**:
-1. Create BatchProcessor utility for operation grouping
-2. Implement batched execution of operations
-3. Add transaction support for batches
-4. Optimize network usage through batching
+1. Create RepositoryEventBus for cross-repository communication
+2. Replace direct dependencies with event-based communication
+3. Implement message passing for decoupled integration
 
-**Expected Outcome**: More efficient sync operations through batching
+**Expected Outcome**: Decoupled repositories without circular dependencies
 
-## Phase 6: UI Component Integration
+**Validation**: No direct circular references between repositories
 
-These segments improve UI integration with the architectural patterns, focusing on specific UI component types.
+### Segment RP-4: Reactive State Management
 
-### Segment 6-A: Standardize DeliveriesFragment
-
-**Objective**: Apply consistent patterns to DeliveriesFragment
+**Objective**: Create framework for reactive state management
 
 **Files**:
-- `app/src/main/java/com/autogratuity/ui/delivery/DeliveriesFragment.java`
+- Create `app/src/main/java/com/autogratuity/ui/common/state/ReactiveState.java`
+- Create `app/src/main/java/com/autogratuity/ui/common/state/StateReducer.java`
+- Update `app/src/main/java/com/autogratuity/ui/common/BaseViewModel.java`
 
 **Changes**:
-1. Implement consistent ViewModel integration
-2. Apply standard ViewState pattern for UI updates
-3. Standardize error presentation
-4. Improve loading state visualization
+1. Create ReactiveState interface for state containers
+2. Implement StateReducer pattern for state transitions
+3. Add state propagation utilities to BaseViewModel
 
-**Expected Outcome**: DeliveriesFragment with standardized UI patterns
+**Expected Outcome**: Framework for consistent state management
 
-### Segment 6-B: Standardize DeliveryDetailDialog
-
-**Objective**: Apply consistent patterns to DeliveryDetailDialog
-
-**Files**:
-- `app/src/main/java/com/autogratuity/dialogs/DeliveryDetailDialog.java`
-- `app/src/main/res/layout/dialog_delivery_detail.xml`
-
-**Changes**:
-1. Implement consistent ViewModel integration
-2. Apply standard ViewState pattern for UI updates
-3. Standardize error presentation
-4. Improve loading state visualization
-
-**Expected Outcome**: DeliveryDetailDialog with standardized UI patterns
-
-### Segment 6-C: Standardize AddressesFragment
-
-**Objective**: Apply consistent patterns to AddressesFragment
-
-**Files**:
-- `app/src/main/java/com/autogratuity/ui/address/AddressesFragment.java`
-
-**Changes**:
-1. Implement consistent ViewModel integration
-2. Apply standard ViewState pattern for UI updates
-3. Standardize error presentation
-4. Improve loading state visualization
-
-**Expected Outcome**: AddressesFragment with standardized UI patterns
-
-### Segment 6-D: Standardize DeliveriesAdapter
-
-**Objective**: Apply consistent patterns to DeliveriesAdapter
-
-**Files**:
-- `app/src/main/java/com/autogratuity/ui/delivery/adapters/DeliveriesAdapter.java`
-
-**Changes**:
-1. Implement DiffUtil for efficient updates
-2. Standardize view binding approach
-3. Improve item state visualization
-4. Add proper error and empty state handling
-
-**Expected Outcome**: DeliveriesAdapter with standardized adapter patterns
-
-## Implementation Sequence
-
-The segments should be implemented in the following order to respect dependencies and maximize progress:
-
-### First Priority (Critical Path)
-1. Phase 1: Immediate Build Error Resolution (Segments 1-A through 1-F)
-   - These must be completed first to restore compilation
-
-### Second Priority (Architectural Foundation)
-2. Phase 2: Core Architecture Standardization (Segments 2-A through 2-E)
-   - These establish the patterns that other components will follow
-
-### Third Priority (Repository Improvements)
-3. Phase 3: Repository Implementation Standardization (Segments 3-A through 3-F)
-   - These apply architectural standards to repositories
-
-### Fourth Priority (ViewModel and UI Improvements)
-4. Phase 4: ViewModel Implementation Standardization (Segments 4-A through 4-D)
-5. Phase 6: UI Component Integration (Segments 6-A through 6-D)
-   - These apply architectural standards to the UI layer
-
-### Fifth Priority (Synchronization Enhancements)
-6. Phase 5: Synchronization Engine Enhancements (Segments 5-A through 5-D)
-   - These improve the reliability and efficiency of synchronization
+**Validation**: ViewModels handle state transitions through reducer pattern
 
 ## Validation Strategy
 
@@ -509,6 +366,6 @@ Each segment should be validated after implementation using the following approa
 
 ## Conclusion
 
-This segmented approach enables systematic implementation of the architectural improvements identified in the Master Checklist. By focusing on well-defined, achievable segments, Claude can efficiently address the issues while maintaining build stability throughout the process.
+This optimized segmentation plan follows the implementation principles by providing focused scope (each segment addresses a specific, well-defined task), respecting file proximity (changes are grouped by related files), delivering incremental value (each segment provides meaningful progress independently), managing dependencies (segments are ordered to respect dependencies between changes), enabling validation (each segment has clear success criteria), and constraining time (each segment is designed for 4-minute implementation).
 
-The implementation plan balances the need for immediate build fixes with the strategic goal of comprehensive architectural improvement. Each segment delivers meaningful progress toward the overall objective of a consistent, maintainable architecture.
+By breaking down the remaining work into these focused segments, we can systematically address the architectural improvements identified in the Master Checklist while maintaining build stability throughout the process.

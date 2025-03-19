@@ -44,7 +44,7 @@ public class DoNotDeliverService extends JobService {
         if (RepositoryProvider.isInitialized()) {
             deliveryRepository = RepositoryProvider.getDeliveryRepository();
             addressRepository = RepositoryProvider.getAddressRepository();
-            authManager = AuthenticationManager.getInstance();
+            authManager = AuthenticationManager.getInstance(getApplicationContext());
             
             // Run the update using RxJava
             updateOldOrders(params);

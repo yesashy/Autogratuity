@@ -579,6 +579,36 @@ public class AddressRepositoryImpl extends FirestoreRepository implements Addres
     }
     
     @Override
+    public Single<List<Address>> getBestTippingAddresses(int limit) {
+        return Single.create(emitter -> {
+            // Query Firestore for addresses with the highest average tip or tip count
+            db.collection(COLLECTION_ADDRESSES)
+                    .whereEqualTo("userId", userId)
+                    .whereGreaterThan("deliveryStats.tipCount", 0) // Only include addresses with tips
+                    .orderBy("deliveryStats.tipCount", Query.Direction.DESCENDING) // Sort by tip count
+                    .orderBy("deliveryStats.averageTip", Query.Direction.DESCENDING) // Then by average tip
+                    .limit(limit)
+                    .get()
+                    .addOnSuccessListener(querySnapshot -> {
+                        List<Address> addresses = new ArrayList<>();
+                        
+                        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                            Address address = doc.toObject(Address.class);
+                            if (address != null) {
+                                addresses.add(address);
+                            }
+                        }
+                        
+                        emitter.onSuccess(addresses);
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Error getting best tipping addresses", e);
+                        emitter.onError(e);
+                    });
+        });
+    }
+    
+    @Override
     public Single<List<Address>> getRecentlyUsedAddresses(int limit) {
         return Single.create(emitter -> {
             // Query Firestore by last delivery date

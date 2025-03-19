@@ -12,12 +12,17 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.LiveData;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.autogratuity.ui.common.state.ViewState;
+
 import com.autogratuity.R;
 import com.autogratuity.data.model.Delivery;
+import com.autogratuity.data.model.ErrorInfo;
+import com.autogratuity.ui.common.ErrorDialogFragment;
 import com.autogratuity.ui.common.RepositoryViewModelFactory;
 import com.autogratuity.ui.delivery.adapters.DeliveriesAdapter;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -167,21 +172,25 @@ public class DeliveriesFragment extends Fragment {
      * Observe changes from ViewModel
      */
     private void observeViewModel() {
-        // Observe deliveries data
-        viewModel.getDeliveries().observe(getViewLifecycleOwner(), this::onDeliveriesLoaded);
-        
-        // Observe loading state
-        viewModel.isLoading().observe(getViewLifecycleOwner(), this::showLoading);
-        
-        // Observe errors
-        viewModel.getError().observe(getViewLifecycleOwner(), error -> {
-            if (error != null) {
-                onError(error);
-            } else {
-                if (errorView != null) {
-                    errorView.setVisibility(View.GONE);
-                }
+        // Observe deliveries state using ViewState pattern
+        viewModel.getDeliveriesState().observe(getViewLifecycleOwner(), state -> {
+            if (state == null) return;
+            
+            if (state.isLoading()) {
+                showLoading(true);
+            } else if (state.isSuccess()) {
+                showLoading(false);
+                onDeliveriesLoaded(state.getData());
+            } else if (state.isError()) {
+                showLoading(false);
+                onError(state.getError());
             }
+        });
+        
+        // Keep legacy observation for backward compatibility
+        viewModel.getDeliveries().observe(getViewLifecycleOwner(), deliveries -> {
+            // This will be used by legacy code that hasn't been migrated to ViewState yet
+            // We don't need to handle the data here as it's already handled by the ViewState
         });
         
         // Observe toast messages
@@ -217,8 +226,8 @@ public class DeliveriesFragment extends Fragment {
     private void onError(Throwable error) {
         Log.e(TAG, "Error loading deliveries", error);
         
-        // Show error message
-        showError(error.getMessage());
+        // Show error dialog with retry option
+        showErrorDialog(error);
     }
     
     /**
@@ -275,7 +284,7 @@ public class DeliveriesFragment extends Fragment {
     }
     
     /**
-     * Show error state
+     * Show error state in the UI
      */
     private void showError(String message) {
         if (errorView != null) {
@@ -295,6 +304,46 @@ public class DeliveriesFragment extends Fragment {
             // Show empty recycler view
             recyclerView.setVisibility(View.VISIBLE);
         }
+    }
+    
+    /**
+     * Show standardized error dialog with retry option
+     * 
+     * @param error The error that occurred
+     */
+    private void showErrorDialog(Throwable error) {
+        if (getContext() == null || getChildFragmentManager() == null) return;
+        
+        // Create error dialog with retry functionality
+        ErrorDialogFragment.builder()
+            .setError(error)
+            .setPrimaryButton("Retry", () -> viewModel.loadDeliveries())
+            .setSecondaryButton("Dismiss", null)
+            .setDismissCallback(() -> {
+                // Show inline error as fallback
+                showError(error.getMessage());
+            })
+            .show(getChildFragmentManager(), "delivery_error_dialog");
+    }
+    
+    /**
+     * Show standardized error dialog with ErrorInfo
+     * 
+     * @param errorInfo Structured error information
+     */
+    private void showErrorDialog(ErrorInfo errorInfo) {
+        if (getContext() == null || getChildFragmentManager() == null) return;
+        
+        // Create error dialog with retry functionality
+        ErrorDialogFragment.builder()
+            .setErrorInfo(errorInfo)
+            .setPrimaryButton("Retry", () -> viewModel.loadDeliveries())
+            .setSecondaryButton("Dismiss", null)
+            .setDismissCallback(() -> {
+                // Show inline error as fallback
+                showError(errorInfo.getMessage());
+            })
+            .show(getChildFragmentManager(), "delivery_error_dialog");
     }
     
     @Override

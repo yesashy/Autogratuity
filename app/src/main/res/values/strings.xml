@@ -24,4 +24,22 @@
     <string name="remaining_mappings">%d deliveries remaining</string>
     <string name="pro_user">Pro User</string>
     <string name="unlimited_mapping">Unlimited</string>
+    
+    <!-- Error Dialog -->
+    <string name="error_dialog_title">Error</string>
+    <string name="error_dialog_retry">Retry</string>
+    <string name="error_dialog_cancel">Cancel</string>
+    <string name="error_dialog_dismiss">Dismiss</string>
+    <string name="error_icon_content_description">Error icon</string>
+    <string name="error_details_title">Technical Details</string>
+    <string name="error_network_title">Network Error</string>
+    <string name="error_network_message">Unable to connect to the server. Please check your internet connection and try again.</string>
+    <string name="error_server_title">Server Error</string>
+    <string name="error_server_message">The server encountered a problem. Please try again later or contact support if the issue persists.</string>
+    <string name="error_auth_title">Authentication Error</string>
+    <string name="error_auth_message">Your login session has expired. Please sign in again to continue.</string>
+    <string name="error_validation_title">Validation Error</string>
+    <string name="error_validation_message">Please check your input and try again.</string>
+    <string name="error_permission_title">Permission Error</string>
+    <string name="error_permission_message">You don\'t have permission to perform this action.</string>
 </resources>

@@ -17,9 +17,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.reactivex.android.schedulers.AndroidSchedulers;
+import com.autogratuity.data.util.RxSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
-import io.reactivex.schedulers.Schedulers;
 
 /**
  * Processes captured Shipt data and integrates it with main app database
@@ -68,8 +67,7 @@ public class ShiptCaptureProcessor {
                     }
                     return unprocessed;
                 })
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applyObservableSchedulers())
                 .subscribe(
                     unprocessedCaptures -> {
                         if (unprocessedCaptures.isEmpty()) {
@@ -172,8 +170,7 @@ public class ShiptCaptureProcessor {
                     }
                     return null; // No matching delivery found
                 })
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applyObservableSchedulers())
                 .subscribe(
                     existingDelivery -> {
                         if (existingDelivery != null) {
@@ -236,8 +233,7 @@ public class ShiptCaptureProcessor {
         // Update the delivery
         disposables.add(
             deliveryRepository.updateDelivery(existingDelivery)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applyCompletableSchedulers())
                 .subscribe(
                     () -> {
                         // Mark source capture as processed
@@ -300,8 +296,7 @@ public class ShiptCaptureProcessor {
         // Save the delivery
         disposables.add(
             deliveryRepository.addDelivery(delivery)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applyCompletableSchedulers())
                 .subscribe(
                     documentReference -> {
                         // Update address
@@ -343,8 +338,7 @@ public class ShiptCaptureProcessor {
         // Update the capture
         disposables.add(
             deliveryRepository.updateDelivery(capture)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applyCompletableSchedulers())
                 .subscribe(
                     () -> Log.d(TAG, "Capture marked as processed: " + 
                             capture.getDeliveryId()),
@@ -365,8 +359,7 @@ public class ShiptCaptureProcessor {
         // Check if address exists in repository
         disposables.add(
             addressRepository.findAddressByNormalizedAddress(normalizedAddress)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applyCompletableSchedulers())
                 .subscribe(
                     existingAddress -> {
                         if (existingAddress != null) {
@@ -415,8 +408,7 @@ public class ShiptCaptureProcessor {
         // Update the address
         disposables.add(
             addressRepository.updateAddress(address)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applyCompletableSchedulers())
                 .subscribe(
                     () -> Log.d(TAG, "Address updated: " + address.getAddressId()),
                     error -> Log.e(TAG, "Error updating address", error)

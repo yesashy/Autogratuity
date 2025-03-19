@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Icon for synchronization -->
+    <item name="ic_sync" type="drawable">@android:drawable/ic_popup_sync</item>
+    
+    <!-- Icon for error -->
+    <item name="ic_error" type="drawable">@android:drawable/ic_dialog_alert</item>
+    
+    <!-- Icon for success/check -->
+    <item name="ic_check" type="drawable">@android:drawable/ic_menu_save</item>
+</resources>

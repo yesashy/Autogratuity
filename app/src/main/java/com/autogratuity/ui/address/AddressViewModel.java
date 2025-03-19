@@ -60,7 +60,7 @@ public class AddressViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        addDisposable("loadAddresses",
             addressRepository.getAddresses()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -83,7 +83,7 @@ public class AddressViewModel extends BaseViewModel {
      * Updates LiveData whenever changes occur in the repository
      */
     public void observeAddresses() {
-        disposables.add(
+        addDisposable("observeAddresses",
             addressRepository.observeAddresses()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -196,7 +196,7 @@ public class AddressViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        addDisposable("addAddress",
             addressRepository.addAddress(address)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())

@@ -1,5 +1,7 @@
 package com.autogratuity.data.repository.core;
 
+import com.autogratuity.data.repository.core.RepositoryContract;
+
 import com.autogratuity.data.model.Address;
 import com.autogratuity.data.model.AppConfig;
 import com.autogratuity.data.model.Delivery;
@@ -32,9 +34,30 @@ import io.reactivex.Single;
  * - Synchronization operations
  * - Device management
  * 
+ * All methods follow the standardized RepositoryContract conventions:
+ * - get*() methods: Return Single<T> for direct entity retrieval
+ * - find*By*() methods: Return Single<T> for conditional retrieval
+ * - add*() methods: Return Single<DocumentReference> for creation operations
+ * - update*() methods: Return Completable for update operations
+ * - delete*() methods: Return Completable for delete operations
+ * - observe*() methods: Return Observable<T> for real-time updates
+ * 
+ * Error handling follows the standardized approach defined in RepositoryContract.ErrorHandling.
+ * Caching follows the standardized approach defined in RepositoryContract.CacheOperations.
+ * 
  * All methods return RxJava types to support asynchronous operations.
  */
-public interface DataRepository {
+public interface DataRepository extends 
+        RepositoryContract.ReadOperations<Object>, 
+        RepositoryContract.WriteOperations<Object>, 
+        RepositoryContract.ObserveOperations<Object>,
+        RepositoryContract.CacheOperations {
+    
+    /**
+     * NOTE: This interface extends RepositoryContract with Object as a placeholder type parameter.
+     * In practice, this interface provides entity-specific methods that follow the contract's
+     * conventions, but with more precise type parameters for each domain entity.
+     */
     
     //-----------------------------------------------------------------------------------
     // User Profile Operations

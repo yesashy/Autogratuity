@@ -5,8 +5,12 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.autogratuity.data.model.AppConfig;
+import com.autogratuity.data.model.ErrorInfo;
+import com.autogratuity.data.model.SyncOperation;
 import com.autogratuity.data.model.UserProfile;
 import com.autogratuity.data.repository.core.FirestoreRepository;
+import com.autogratuity.data.repository.core.RepositoryEventBus;
+import com.autogratuity.data.repository.utils.RepositoryConstants;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.ListenerRegistration;
 
@@ -15,6 +19,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Completable;
 import io.reactivex.Observable;
@@ -23,10 +28,18 @@ import io.reactivex.Single;
 /**
  * Implementation of the ConfigRepository interface that provides
  * configuration management and device registration functionality.
+ * 
+ * This class demonstrates the standardized architectural patterns for:
+ * - Consistent caching using CacheStrategy
+ * - Standardized error handling using RepositoryErrorHandler
+ * - Consistent RxJava patterns for repository operations
  */
-public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigRepository {
+public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigRepository, RepositoryEventBus.EventListener {
     
     private static final String TAG = "ConfigRepository";
+    
+    // Event bus for cross-repository communication
+    private final RepositoryEventBus eventBus;
     
     /**
      * Constructor for ConfigRepositoryImpl
@@ -35,6 +48,10 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
      */
     public ConfigRepositoryImpl(Context context) {
         super(context);
+        
+        // Initialize event bus and register as listener
+        this.eventBus = RepositoryEventBus.getInstance();
+        this.eventBus.register(RepositoryEventBus.EventType.CONFIG_REPOSITORY, this);
     }
     
     //-----------------------------------------------------------------------------------
@@ -43,59 +60,14 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
     
     @Override
     public Single<AppConfig> getAppConfig() {
-        String cacheKey = "app_config";
+        final String entityType = RepositoryConstants.EntityType.APP_CONFIG;
+        final String operationName = RepositoryConstants.operationName(
+                RepositoryConstants.OperationName.GET, entityType, null);
+        final String cacheKey = RepositoryConstants.CachePrefix.APP_CONFIG;
         
-        return Single.create(emitter -> {
-            // First try memory cache
-            AppConfig cached = getFromCache(cacheKey);
-            if (cached != null) {
-                emitter.onSuccess(cached);
-                return;
-            }
-            
-            // Check if we have a stored config
-            AppConfig storedConfig = getFromPrefs(KEY_APP_CONFIG, AppConfig.class);
-            if (storedConfig != null) {
-                // Put in memory cache and return
-                putInCache(cacheKey, storedConfig);
-                emitter.onSuccess(storedConfig);
-                
-                // Refresh in background
-                fetchAppConfig()
-                        .subscribe(
-                                config -> {
-                                    // Update cache
-                                    putInCache(cacheKey, config);
-                                    saveToPrefs(KEY_APP_CONFIG, config);
-                                },
-                                error -> Log.e(TAG, "Error fetching app config in background", error)
-                        );
-                return;
-            }
-            
-            // Fetch from Firestore
-            fetchAppConfig()
-                    .subscribe(
-                            config -> {
-                                // Cache and return
-                                putInCache(cacheKey, config);
-                                saveToPrefs(KEY_APP_CONFIG, config);
-                                emitter.onSuccess(config);
-                            },
-                            error -> {
-                                handleFirestoreError(error, "getting app config");
-                                
-                                // If we have a local fallback config, use it
-                                if (storedConfig != null) {
-                                    emitter.onSuccess(storedConfig);
-                                } else {
-                                    // Create a default config
-                                    AppConfig defaultConfig = createDefaultAppConfig();
-                                    emitter.onSuccess(defaultConfig);
-                                }
-                            }
-                    );
-        });
+        // Use standardized cache-then-source pattern
+        return getWithCache(cacheKey, ignored -> fetchAppConfig())
+                .compose(applyReadTransformer(entityType, operationName));
     }
     
     /**
@@ -104,6 +76,9 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
      * @return Single that emits the app configuration
      */
     private Single<AppConfig> fetchAppConfig() {
+        final String entityType = RepositoryConstants.EntityType.APP_CONFIG;
+        final String operationName = "fetch app config";
+        
         return Single.create(emitter -> {
             DocumentReference docRef = db.collection(COLLECTION_SYSTEM_CONFIG).document("app_config");
             docRef.get()
@@ -111,17 +86,30 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                         if (documentSnapshot.exists()) {
                             AppConfig config = documentSnapshot.toObject(AppConfig.class);
                             if (config != null) {
+                                // Cache and emit
+                                final String cacheKey = RepositoryConstants.CachePrefix.APP_CONFIG;
+                                putInCache(cacheKey, config, 30, TimeUnit.MINUTES);
                                 emitter.onSuccess(config);
                             } else {
                                 emitter.onError(new Exception("Failed to parse app config"));
                             }
                         } else {
-                            emitter.onError(new Exception("App config not found"));
+                            // If no config exists, create a default one
+                            AppConfig defaultConfig = createDefaultAppConfig();
+                            emitter.onSuccess(defaultConfig);
                         }
                     })
                     .addOnFailureListener(e -> {
-                        handleFirestoreError(e, "fetching app config");
-                        emitter.onError(e);
+                        // Use standardized error handling
+                        ErrorInfo errorInfo = handleFirestoreError(e, operationName, entityType);
+                        
+                        // Provide a fallback config when offline
+                        if (!isNetworkAvailable() || errorInfo.isNetworkError()) {
+                            AppConfig defaultConfig = createDefaultAppConfig();
+                            emitter.onSuccess(defaultConfig);
+                        } else {
+                            emitter.onError(new Exception(errorInfo.getUserFriendlyMessage(), e));
+                        }
                     });
         });
     }
@@ -186,9 +174,14 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
     
     @Override
     public Observable<AppConfig> observeAppConfig() {
+        final String entityType = RepositoryConstants.EntityType.APP_CONFIG;
+        final String operationName = RepositoryConstants.operationName(
+                RepositoryConstants.OperationName.OBSERVE, entityType, null);
+        final String cacheKey = RepositoryConstants.CachePrefix.APP_CONFIG;
+        final String listenerKey = "app_config_listener";
+        
         return Observable.create(emitter -> {
             // Set up listener
-            String listenerKey = "app_config_listener";
             final ListenerRegistration listenerRef = activeListeners.get(listenerKey);
             
             if (listenerRef != null) {
@@ -200,6 +193,7 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
             final DocumentReference docRef = db.collection(COLLECTION_SYSTEM_CONFIG).document("app_config");
             final ListenerRegistration newListener = docRef.addSnapshotListener((documentSnapshot, e) -> {
                 if (e != null) {
+                    handleFirestoreError(e, operationName, entityType);
                     if (!emitter.isDisposed()) {
                         emitter.onError(e);
                     }
@@ -209,9 +203,8 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                 if (documentSnapshot != null && documentSnapshot.exists()) {
                     AppConfig config = documentSnapshot.toObject(AppConfig.class);
                     if (config != null) {
-                        // Update cache
-                        putInCache("app_config", config);
-                        saveToPrefs(KEY_APP_CONFIG, config);
+                        // Cache and emit
+                        putInCache(cacheKey, config, 30, TimeUnit.MINUTES);
                         
                         // Emit to subscribers
                         if (!emitter.isDisposed()) {
@@ -231,7 +224,7 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
             });
             
             // Initially load from cache or Firestore
-            AppConfig cached = getFromCache("app_config");
+            AppConfig cached = getFromCache(cacheKey);
             if (cached != null) {
                 emitter.onNext(cached);
             } else {
@@ -241,7 +234,8 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                                 throwable -> Log.e(TAG, "Error loading initial app config", throwable)
                         );
             }
-        });
+        })
+        .compose(applyObserveTransformer(entityType, operationName));
     }
     
     //-----------------------------------------------------------------------------------
@@ -250,28 +244,33 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
     
     @Override
     public Completable registerDevice(Map<String, Object> deviceInfo) {
+        final String entityType = RepositoryConstants.EntityType.DEVICE;
+        final String operationName = RepositoryConstants.operationName(
+                RepositoryConstants.OperationName.ADD, entityType, null);
+        
         if (deviceInfo == null) {
             deviceInfo = new HashMap<>();
         }
         
         // Ensure required fields
-        deviceInfo.put("userId", userId);
-        deviceInfo.put("deviceId", deviceId);
+        final Map<String, Object> finalDeviceInfo = new HashMap<>(deviceInfo);
+        finalDeviceInfo.put("userId", userId);
+        finalDeviceInfo.put("deviceId", deviceId);
         
-        if (!deviceInfo.containsKey("platform")) {
-            deviceInfo.put("platform", "android");
+        if (!finalDeviceInfo.containsKey("platform")) {
+            finalDeviceInfo.put("platform", "android");
         }
         
-        if (!deviceInfo.containsKey("lastActive")) {
-            deviceInfo.put("lastActive", new Date());
+        if (!finalDeviceInfo.containsKey("lastActive")) {
+            finalDeviceInfo.put("lastActive", new Date());
         }
         
         // Add default settings if not provided
-        if (!deviceInfo.containsKey("settings")) {
+        if (!finalDeviceInfo.containsKey("settings")) {
             Map<String, Object> settings = new HashMap<>();
             settings.put("syncEnabled", true);
             settings.put("notificationsEnabled", true);
-            deviceInfo.put("settings", settings);
+            finalDeviceInfo.put("settings", settings);
         }
         
         // Add metadata
@@ -279,14 +278,14 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
         metadata.put("createdAt", new Date());
         metadata.put("updatedAt", new Date());
         metadata.put("firstLoginAt", new Date());
-        deviceInfo.put("metadata", metadata);
+        finalDeviceInfo.put("metadata", metadata);
         
         // Add capabilities
         Map<String, Object> capabilities = new HashMap<>();
         capabilities.put("supportsBackgroundSync", true);
         capabilities.put("supportsNotifications", true);
         capabilities.put("supportsOfflineMode", true);
-        deviceInfo.put("capabilities", capabilities);
+        finalDeviceInfo.put("capabilities", capabilities);
         
         String docId = userId + "_" + deviceId;
         DocumentReference docRef = db.collection(COLLECTION_USER_DEVICES).document(docId);
@@ -305,14 +304,13 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                                 emitter.onComplete();
                             })
                             .addOnFailureListener(e -> {
-                                handleFirestoreError(e, "updating existing device");
-                                emitter.onError(e);
+                                // Use standardized error handling
+                                ErrorInfo errorInfo = handleFirestoreError(e, "updating existing device", entityType);
+                                emitter.onError(new Exception(errorInfo.getUserFriendlyMessage(), e));
                             });
                         } else {
                             // Create new device record
-                            // Create a final copy of the deviceInfo map
-            final Map<String, Object> finalDeviceInfo = new HashMap<>(deviceInfo);
-            docRef.set(finalDeviceInfo)
+                            docRef.set(finalDeviceInfo)
                                     .addOnSuccessListener(aVoid -> {
                                         // Also update user profile with device ID
                                         addDeviceToUserProfile(deviceId)
@@ -322,16 +320,37 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                                                 );
                                     })
                                     .addOnFailureListener(e -> {
-                                        handleFirestoreError(e, "registering device");
-                                        emitter.onError(e);
+                                        // Check if offline
+                                        if (!isNetworkAvailable()) {
+                                            // Create sync operation for when we're back online through event bus
+                                            SyncOperation operation = new SyncOperation(
+                                            userId,
+                                            "create",
+                                            entityType,
+                                            docId,
+                    finalDeviceInfo);
+            
+            // Post event to sync repository
+            postSyncOperationEvent(operation)
+                    .subscribe(
+                            () -> emitter.onComplete(),
+                            emitter::onError
+                    );
+                                        } else {
+                                            // Use standardized error handling
+                                            ErrorInfo errorInfo = handleFirestoreError(e, "registering device", entityType);
+                                            emitter.onError(new Exception(errorInfo.getUserFriendlyMessage(), e));
+                                        }
                                     });
                         }
                     })
                     .addOnFailureListener(e -> {
-                        handleFirestoreError(e, "checking if device exists");
-                        emitter.onError(e);
+                        // Use standardized error handling
+                        ErrorInfo errorInfo = handleFirestoreError(e, "checking if device exists", entityType);
+                        emitter.onError(new Exception(errorInfo.getUserFriendlyMessage(), e));
                     });
-        });
+        })
+        .compose(applyWriteTransformer(entityType, operationName));
     }
     
     /**
@@ -341,6 +360,9 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
      * @return Completable that completes when update is finished
      */
     private Completable addDeviceToUserProfile(String deviceId) {
+        final String entityType = RepositoryConstants.EntityType.USER_PROFILE;
+        final String operationName = "add device to user profile";
+        
         return getUserProfile()
                 .flatMapCompletable(profile -> {
                     if (profile.getSyncInfo() == null) {
@@ -358,11 +380,16 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                     } else {
                         return Completable.complete();
                     }
-                });
+                })
+                .compose(applyWriteTransformer(entityType, operationName));
     }
     
     @Override
     public Completable updateDeviceLastActive() {
+        final String entityType = RepositoryConstants.EntityType.DEVICE;
+        final String operationName = RepositoryConstants.operationName(
+                RepositoryConstants.OperationName.UPDATE, entityType, null);
+        
         String docId = userId + "_" + deviceId;
         final DocumentReference docRef = db.collection(COLLECTION_USER_DEVICES).document(docId);
         
@@ -371,8 +398,7 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
         updates.put("metadata.updatedAt", new Date());
         
         return Completable.create(emitter -> {
-            final DocumentReference finalDocRef = docRef;
-            finalDocRef.update(updates)
+            docRef.update(updates)
                     .addOnSuccessListener(aVoid -> {
                         emitter.onComplete();
                     })
@@ -387,12 +413,29 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                                             emitter::onComplete,
                                             emitter::onError
                                     );
+                        } else if (!isNetworkAvailable()) {
+                            // Create sync operation for when we're back online through event bus
+                            SyncOperation operation = new SyncOperation(
+                            userId,
+                            "update",
+                            entityType,
+                            docId,
+                    updates);
+            
+            // Post event to sync repository
+            postSyncOperationEvent(operation)
+                    .subscribe(
+                            () -> emitter.onComplete(),
+                            emitter::onError
+                    );
                         } else {
-                            handleFirestoreError(e, "updating device last active");
-                            emitter.onError(e);
+                            // Use standardized error handling
+                            ErrorInfo errorInfo = handleFirestoreError(e, "updating device last active", entityType);
+                            emitter.onError(new Exception(errorInfo.getUserFriendlyMessage(), e));
                         }
                     });
-        });
+        })
+        .compose(applyWriteTransformer(entityType, operationName));
     }
     
     //-----------------------------------------------------------------------------------
@@ -401,15 +444,14 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
     
     @Override
     public Completable clearCaches() {
-        // Clear memory cache
-        memoryCache.clear();
-        cacheTimestamps.clear();
-        
-        return Completable.complete();
+        // First call super implementation to clear memory cache
+        return super.clearCaches();
     }
     
     @Override
     public Completable prefetchCriticalData() {
+        final String operationName = "prefetch critical data";
+        
         // Prefetch critical data for improved performance
         return Completable.mergeArray(
                 // Prefetch user profile
@@ -420,16 +462,32 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                 
                 // Prefetch app config
                 getAppConfig().ignoreElement()
-        );
+        )
+        .compose(applyWriteTransformer("all", operationName));
     }
 
     @Override
     public String getConfigValue(String key, String defaultValue) {
+        final String cachePrefixConfigValue = "config_value_";
+        final String cacheKey = cachePrefixConfigValue + key;
+        
         try {
+            // First try cache
+            String cachedValue = getFromCache(cacheKey);
+            if (cachedValue != null) {
+                return cachedValue;
+            }
+            
+            // Get from config
             AppConfig config = getAppConfig().blockingGet();
             if (config != null && config.getCustomData() != null && config.getCustomData().containsKey(key)) {
                 Object value = config.getCustomData().get(key);
-                return value != null ? value.toString() : defaultValue;
+                String stringValue = value != null ? value.toString() : defaultValue;
+                
+                // Cache for future use
+                putInCache(cacheKey, stringValue, 1, TimeUnit.HOURS);
+                
+                return stringValue;
             }
             return defaultValue;
         } catch (Exception e) {
@@ -440,15 +498,34 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
     
     @Override
     public boolean getConfigBoolean(String key, boolean defaultValue) {
+        final String cachePrefixConfigBoolean = "config_boolean_";
+        final String cacheKey = cachePrefixConfigBoolean + key;
+        
         try {
+            // First try cache
+            Boolean cachedValue = getFromCache(cacheKey);
+            if (cachedValue != null) {
+                return cachedValue;
+            }
+            
+            // Get from config
             AppConfig config = getAppConfig().blockingGet();
             if (config != null && config.getCustomData() != null && config.getCustomData().containsKey(key)) {
                 Object value = config.getCustomData().get(key);
+                boolean boolValue;
+                
                 if (value instanceof Boolean) {
-                    return (Boolean) value;
+                    boolValue = (Boolean) value;
                 } else if (value != null) {
-                    return Boolean.parseBoolean(value.toString());
+                    boolValue = Boolean.parseBoolean(value.toString());
+                } else {
+                    boolValue = defaultValue;
                 }
+                
+                // Cache for future use
+                putInCache(cacheKey, boolValue, 1, TimeUnit.HOURS);
+                
+                return boolValue;
             }
             return defaultValue;
         } catch (Exception e) {
@@ -459,6 +536,9 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
     
     @Override
     public Completable incrementCounter(String counterKey) {
+        final String entityType = "counter";
+        final String operationName = "increment counter";
+        
         return Completable.defer(() -> {
             DocumentReference docRef = db.collection(COLLECTION_SYSTEM_CONFIG)
                     .document("counters");
@@ -475,17 +555,98 @@ public class ConfigRepositoryImpl extends FirestoreRepository implements ConfigR
                                 initialData.put(counterKey, 1);
                                 docRef.set(initialData)
                                         .addOnSuccessListener(aVoid -> emitter.onComplete())
-                                        .addOnFailureListener(emitter::onError);
+                                        .addOnFailureListener(innerE -> {
+                                            // Use standardized error handling
+                                            ErrorInfo errorInfo = handleFirestoreError(
+                                                    innerE, "creating counter document", entityType);
+                                            emitter.onError(new Exception(errorInfo.getUserFriendlyMessage(), innerE));
+                                        });
+                            } else if (!isNetworkAvailable()) {
+                                // Create sync operation for when we're back online
+                                Map<String, Object> updates = new HashMap<>();
+                                updates.put(counterKey, 1); // Will be incremented
+                                
+                                enqueueOperation("update", entityType, "counters", updates)
+                                        .subscribe(
+                                                () -> emitter.onComplete(),
+                                                emitter::onError
+                                        );
                             } else {
-                                emitter.onError(e);
+                                // Use standardized error handling
+                                ErrorInfo errorInfo = handleFirestoreError(e, "incrementing counter", entityType);
+                                emitter.onError(new Exception(errorInfo.getUserFriendlyMessage(), e));
                             }
                         });
             });
-        });
+        })
+        .compose(applyWriteTransformer(entityType, operationName));
     }
     
     @Override
     public Completable noOpCompletable() {
-        return Completable.complete();
+        return Completable.complete()
+                .compose(applyWriteTransformer("none", "no-op operation"));
+    }
+    
+    /**
+     * Post a sync operation event to the event bus
+     * 
+     * @param operation The sync operation to post
+     * @return Completable that completes when the event is posted
+     */
+    private Completable postSyncOperationEvent(SyncOperation operation) {
+        return Completable.fromAction(() -> {
+            Map<String, Object> data = new HashMap<>();
+            data.put("operation", operation);
+            
+            eventBus.post(
+                    RepositoryEventBus.EventType.SYNC_OPERATION_ENQUEUED,
+                    RepositoryEventBus.EventType.CONFIG_REPOSITORY,
+                    data,
+                    RepositoryEventBus.EventType.SYNC_REPOSITORY);
+        });
+    }
+    
+    /**
+     * Handle events from the event bus
+     * 
+     * @param event The repository event
+     */
+    @Override
+    public void onEvent(RepositoryEventBus.RepositoryEvent event) {
+        if (event == null) {
+            return;
+        }
+        
+        Log.d(TAG, "Received event: " + event.getType() + " from " + event.getSource());
+        
+        switch (event.getType()) {
+            case RepositoryEventBus.EventType.SYNC_STATUS_CHANGED:
+                // Handle sync status change
+                break;
+                
+            case RepositoryEventBus.EventType.SYNC_OPERATION_COMPLETED:
+                // Handle sync operation completion
+                break;
+                
+            case RepositoryEventBus.EventType.SYNC_OPERATION_FAILED:
+                // Handle sync operation failure
+                break;
+                
+            default:
+                // Ignore other events
+                break;
+        }
+    }
+    
+    /**
+     * Clean up resources when repository is no longer needed
+     */
+    public void cleanup() {
+        // Unregister from event bus
+        eventBus.unregister(RepositoryEventBus.EventType.CONFIG_REPOSITORY, this);
+        
+        // Clean up any other resources
+        super.cleanup();
     }
 }

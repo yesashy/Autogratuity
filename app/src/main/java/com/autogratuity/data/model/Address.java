@@ -1,11 +1,13 @@
 package com.autogratuity.data.model;
 
-import com.google.firebase                                                                                                                                                                      .Timestamp;
+import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentId;
 import com.google.firebase.firestore.Exclude;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Model class representing an address in the Autogratuity app.
@@ -292,8 +294,10 @@ public class Address {
         private String source;
         private String importId;
         private long version;
+        private Map<String, Object> customData;
         
         public Metadata() {
+            this.customData = new HashMap<>();
         }
         
         // Getters and setters
@@ -335,6 +339,14 @@ public class Address {
         
         public void setVersion(long version) {
             this.version = version;
+        }
+        
+        public Map<String, Object> getCustomData() {
+            return customData != null ? customData : new HashMap<>();
+        }
+        
+        public void setCustomData(Map<String, Object> customData) {
+            this.customData = customData != null ? customData : new HashMap<>();
         }
     }
     
@@ -458,6 +470,17 @@ public class Address {
     
     public void setMetadata(Metadata metadata) {
         this.metadata = metadata;
+    }
+    
+    /**
+     * Get custom data from metadata
+     * 
+     * @return Map of custom data, or empty map if metadata is null
+     */
+    @Exclude
+    public Map<String, Object> getCustomData() {
+        return metadata != null && metadata.getCustomData() != null ?
+                metadata.getCustomData() : new HashMap<>();
     }
     
     /**

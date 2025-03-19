@@ -8,6 +8,7 @@ import com.autogratuity.data.model.Delivery;
 import com.autogratuity.data.model.DeliveryStats;
 import com.autogratuity.data.repository.delivery.DeliveryRepository;
 import com.autogratuity.ui.common.BaseViewModel;
+import com.autogratuity.ui.common.state.ViewState;
 import com.google.firebase.firestore.DocumentReference;
 
 import java.util.Date;
@@ -29,6 +30,7 @@ public class DeliveryViewModel extends BaseViewModel {
     private final MutableLiveData<Delivery> selectedDeliveryLiveData = new MutableLiveData<>();
     private final MutableLiveData<DeliveryStats> deliveryStatsLiveData = new MutableLiveData<>();
     private final MutableLiveData<Map<String, DeliveryStats>> deliveryStatsByPeriodLiveData = new MutableLiveData<>();
+    private final MutableLiveData<ViewState<List<Delivery>>> deliveriesStateLiveData = new MutableLiveData<>();
     
     /**
      * Constructor with repository injection
@@ -46,6 +48,15 @@ public class DeliveryViewModel extends BaseViewModel {
      */
     public LiveData<List<Delivery>> getDeliveries() {
         return deliveriesLiveData;
+    }
+    
+    /**
+     * Get deliveries as ViewState LiveData for comprehensive state management
+     * 
+     * @return LiveData of ViewState containing loading/success/error states with deliveries data
+     */
+    public LiveData<ViewState<List<Delivery>>> getDeliveriesState() {
+        return deliveriesStateLiveData;
     }
     
     /**
@@ -85,18 +96,25 @@ public class DeliveryViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        // Update ViewState to loading
+        deliveriesStateLiveData.setValue(ViewState.loading());
+        
+        addDisposable("loadDeliveries",
             deliveryRepository.getDeliveries(limit, startAfter)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
                     deliveries -> {
+                        // Set both the regular LiveData and the ViewState LiveData
                         deliveriesLiveData.setValue(deliveries);
+                        deliveriesStateLiveData.setValue(ViewState.success(deliveries));
                         setLoading(false);
                     },
                     error -> {
                         Log.e(TAG, "Error loading deliveries", error);
+                        // Set error in both the ViewModel and the ViewState
                         setError(error);
+                        deliveriesStateLiveData.setValue(ViewState.error(error));
                         setLoading(false);
                     }
                 )
@@ -115,17 +133,24 @@ public class DeliveryViewModel extends BaseViewModel {
      * Updates LiveData whenever changes occur in the repository
      */
     public void observeDeliveries() {
-        disposables.add(
+        // Update state to loading if we don't already have data
+        if (deliveriesLiveData.getValue() == null || deliveriesLiveData.getValue().isEmpty()) {
+            deliveriesStateLiveData.setValue(ViewState.loading());
+        }
+        
+        addDisposable("observeDeliveries",
             deliveryRepository.observeDeliveries()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
                     deliveries -> {
                         deliveriesLiveData.setValue(deliveries);
+                        deliveriesStateLiveData.setValue(ViewState.success(deliveries));
                     },
                     error -> {
                         Log.e(TAG, "Error observing deliveries", error);
                         setError(error);
+                        deliveriesStateLiveData.setValue(ViewState.error(error));
                     }
                 )
         );
@@ -140,7 +165,7 @@ public class DeliveryViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        addDisposable("getDeliveryById",
             deliveryRepository.getDeliveryById(deliveryId)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -167,7 +192,7 @@ public class DeliveryViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        addDisposable("getDeliveriesByAddress",
             deliveryRepository.getDeliveriesByAddress(addressId)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -195,7 +220,7 @@ public class DeliveryViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        addDisposable("getDeliveriesByTimeRange",
             deliveryRepository.getDeliveriesByTimeRange(startDate, endDate)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -374,7 +399,7 @@ public class DeliveryViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        addDisposable("addDelivery",
             deliveryRepository.addDelivery(delivery)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -402,7 +427,7 @@ public class DeliveryViewModel extends BaseViewModel {
         setLoading(true);
         clearError();
         
-        disposables.add(
+        addDisposable("updateDelivery",
             deliveryRepository.updateDelivery(delivery)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())

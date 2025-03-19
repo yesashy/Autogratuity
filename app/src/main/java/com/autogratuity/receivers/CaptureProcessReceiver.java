@@ -8,9 +8,10 @@ import android.util.Log;
 import com.autogratuity.data.repository.core.RepositoryProvider;
 import com.autogratuity.utils.ShiptCaptureProcessor;
 
-import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
-import io.reactivex.schedulers.Schedulers;
+import com.autogratuity.data.util.RxSchedulers;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
+import com.autogratuity.data.repository.address.AddressRepository;
 
 /**
  * Receiver for processing Shipt captures on schedule
@@ -33,8 +34,12 @@ public class CaptureProcessReceiver extends BroadcastReceiver {
             }
         }
 
-        // Process captures using ShiptCaptureProcessor but with better error handling
-        ShiptCaptureProcessor processor = new ShiptCaptureProcessor(context);
+        // Process captures using ShiptCaptureProcessor with repository pattern
+        DeliveryRepository deliveryRepository = RepositoryProvider.getDeliveryRepository();
+        AddressRepository addressRepository = RepositoryProvider.getAddressRepository();
+        
+        // Create processor with proper repository dependencies
+        ShiptCaptureProcessor processor = new ShiptCaptureProcessor(context, deliveryRepository, addressRepository);
         
         // Using the existing callback pattern until ShiptCaptureProcessor is updated
         // to return RxJava Single in a future task

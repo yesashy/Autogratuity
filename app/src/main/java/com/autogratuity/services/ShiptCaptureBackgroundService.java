@@ -18,6 +18,9 @@ import androidx.core.app.NotificationCompat;
 
 import com.autogratuity.MainActivity;
 import com.autogratuity.R;
+import com.autogratuity.data.repository.address.AddressRepository;
+import com.autogratuity.data.repository.core.RepositoryProvider;
+import com.autogratuity.data.repository.delivery.DeliveryRepository;
 import com.autogratuity.receivers.CaptureProcessReceiver;
 import com.autogratuity.utils.ShiptCaptureProcessor;
 
@@ -144,7 +147,22 @@ public class ShiptCaptureBackgroundService extends Service {
 
         // Process captures in a background thread
         new Thread(() -> {
-            ShiptCaptureProcessor processor = new ShiptCaptureProcessor(this);
+            // Ensure repositories are initialized
+            if (!RepositoryProvider.isInitialized()) {
+                try {
+                    RepositoryProvider.initialize(this);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to initialize repositories", e);
+                    return;
+                }
+            }
+
+            // Get necessary repositories
+            DeliveryRepository deliveryRepository = RepositoryProvider.getDeliveryRepository();
+            AddressRepository addressRepository = RepositoryProvider.getAddressRepository();
+            
+            // Create processor with proper repository dependencies
+            ShiptCaptureProcessor processor = new ShiptCaptureProcessor(this, deliveryRepository, addressRepository);
             processor.processCaptures(new ShiptCaptureProcessor.ProcessCallback() {
                 @Override
                 public void onComplete(int count) {

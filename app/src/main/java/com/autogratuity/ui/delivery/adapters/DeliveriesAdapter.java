@@ -16,9 +16,12 @@ import com.autogratuity.data.model.Delivery;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+
+import androidx.recyclerview.widget.DiffUtil;
 
 /**
  * Adapter for displaying deliveries in a RecyclerView.
@@ -26,7 +29,7 @@ import java.util.Locale;
  */
 public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.DeliveryViewHolder> {
     
-    private final List<Delivery> deliveries;
+    private List<Delivery> deliveries;
     private final OnDeliveryClickListener listener;
     private final DateFormat dateFormat;
     
@@ -41,7 +44,7 @@ public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.De
      * Constructor with deliveries and click listener
      */
     public DeliveriesAdapter(List<Delivery> deliveries, OnDeliveryClickListener listener) {
-        this.deliveries = deliveries;
+        this.deliveries = new ArrayList<>(deliveries);
         this.listener = listener;
         this.dateFormat = new SimpleDateFormat("MMM d, yyyy", Locale.getDefault());
     }
@@ -66,12 +69,19 @@ public class DeliveriesAdapter extends RecyclerView.Adapter<DeliveriesAdapter.De
     }
     
     /**
-     * Update the list of deliveries and refresh the adapter
+     * Update the list of deliveries and refresh the adapter using DiffUtil
+     * for efficient updates with animations
      */
     public void updateDeliveries(List<Delivery> newDeliveries) {
-        deliveries.clear();
-        deliveries.addAll(newDeliveries);
-        notifyDataSetChanged();
+        // Calculate the difference between old and new lists
+        DeliveryDiffCallback diffCallback = new DeliveryDiffCallback(this.deliveries, newDeliveries);
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(diffCallback);
+        
+        // Update the data
+        this.deliveries = new ArrayList<>(newDeliveries);
+        
+        // Dispatch the updates to the adapter
+        diffResult.dispatchUpdatesTo(this);
     }
     
     /**

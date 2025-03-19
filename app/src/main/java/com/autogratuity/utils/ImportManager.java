@@ -8,8 +8,10 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 
 import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Address.Location;
 import com.autogratuity.data.model.Delivery;
 import com.autogratuity.data.model.SyncOperation;
+import com.autogratuity.data.model.converter.ModelConverters;
 import com.autogratuity.data.repository.address.AddressRepository;
 import com.autogratuity.data.repository.delivery.DeliveryRepository;
 import com.autogratuity.data.repository.sync.SyncRepository;
@@ -242,14 +244,16 @@ public class ImportManager {
             for (Delivery delivery : deliveries) {
                 if (delivery.getAddress() != null) {
                     // Ensure the address is geocoded
-                    if (delivery.getAddress().getLocation() == null ||
-                            (delivery.getAddress().getLocation().getLatitude() == 0 &&
-                             delivery.getAddress().getLocation().getLongitude() == 0)) {
+                    if (ModelConverters.getLocation(delivery.getAddress()) == null ||
+                            (ModelConverters.getLocation(delivery.getAddress()).getLatitude() == 0 &&
+                             ModelConverters.getLocation(delivery.getAddress()).getLongitude() == 0)) {
                         try {
-                            // Geocode the address
-                            Address geocodedAddress = addressRepository.geocodeAddress(delivery.getAddress())
+                            // Geocode the address - first convert SimpleAddress to full Address
+                            Address fullAddress = ModelConverters.fromSimpleAddress(delivery.getAddress());
+                            Address geocodedAddress = addressRepository.geocodeAddress(fullAddress)
                                     .blockingGet();
-                            delivery.setAddress(geocodedAddress);
+                            // Convert geocoded address back to SimpleAddress
+                            delivery.setAddress(ModelConverters.toSimpleAddress(geocodedAddress));
                         } catch (Exception e) {
                             Log.e(TAG, "Error geocoding address: " + e.getMessage());
                         }
@@ -290,12 +294,14 @@ public class ImportManager {
                         }
                         
                         if (existingAddress == null) {
+                            // Convert SimpleAddress to Address for creation
+                            Address fullAddress = ModelConverters.fromSimpleAddress(delivery.getAddress());
                             // Create new address
-                            addressRepository.addAddress(delivery.getAddress())
+                            addressRepository.addAddress(fullAddress)
                                     .blockingGet();
                         } else {
-                            // Use existing address
-                            delivery.setAddress(existingAddress);
+                            // Use existing address - convert to SimpleAddress
+                            delivery.setAddress(ModelConverters.toSimpleAddress(existingAddress));
                         }
                     }
                     
@@ -312,8 +318,10 @@ public class ImportManager {
                         // Convert delivery to map
                         Map<String, Object> deliveryMap = new HashMap<>();
                         // Add delivery details to map
-                        deliveryMap.put("address", delivery.getAddress());
-                        deliveryMap.put("amounts", delivery.getAmounts());
+                        // Convert Address.SimpleAddress to Address and save (compatible with sync)
+                        Address fullAddress = ModelConverters.fromSimpleAddress(delivery.getAddress());
+                        deliveryMap.put("address", fullAddress);
+                        deliveryMap.put("amounts", ModelConverters.toAmounts(delivery.getAmounts())); // Convert to compatible type
                         deliveryMap.put("notes", delivery.getNotes());
                         // Add more fields as needed
                         

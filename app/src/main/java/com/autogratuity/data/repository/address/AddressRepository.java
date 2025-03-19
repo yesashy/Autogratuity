@@ -103,6 +103,14 @@ public interface AddressRepository extends DataRepository {
     Single<List<Address>> getFavoriteAddresses();
     
     /**
+     * Get addresses with the best tips.
+     * 
+     * @param limit Maximum number of addresses to return
+     * @return Single that emits a list of addresses sorted by tip amount
+     */
+    Single<List<Address>> getBestTippingAddresses(int limit);
+    
+    /**
      * Get addresses sorted by most recent delivery.
      * 
      * @param limit Maximum number of addresses to return

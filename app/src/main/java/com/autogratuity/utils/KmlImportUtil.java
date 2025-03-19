@@ -7,6 +7,7 @@ import android.util.Xml;
 import android.widget.Toast;
 
 import com.autogratuity.data.model.Address;
+import com.autogratuity.data.model.Address.Location;
 import com.autogratuity.data.model.Coordinates;
 import com.autogratuity.data.model.Delivery;
 import com.autogratuity.data.model.Metadata;
@@ -14,6 +15,7 @@ import com.autogratuity.data.model.Reference;
 import com.autogratuity.data.model.Status;
 import com.autogratuity.data.model.Times;
 import com.autogratuity.data.model.Amounts;
+import com.autogratuity.data.model.converter.ModelConverters;
 import com.autogratuity.data.repository.address.AddressRepository;
 import com.autogratuity.data.repository.delivery.DeliveryRepository;
 
@@ -271,14 +273,14 @@ public class KmlImportUtil {
         address.setNormalizedAddress(addressRepository.normalizeAddress(addressText));
         
         if (location != null) {
-            address.setLocation(location);
+            address.setLocation(ModelConverters.toLocation(location));
         }
         
         // Create delivery
         Delivery delivery = new Delivery();
         
         // Set address
-        delivery.setAddress(address);
+        delivery.setAddress(address.toSimpleAddress());
         
         // Set reference (will be updated with address ID after saving)
         Reference reference = new Reference();

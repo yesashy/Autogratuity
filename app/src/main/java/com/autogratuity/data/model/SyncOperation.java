@@ -47,9 +47,14 @@ public class SyncOperation {
     private Timestamp lastAttemptTime;
     private Timestamp nextAttemptTime;
     private int retryCount;
-    private int maxRetries = 3;
+    private int maxRetries = 5; // Increased from 3 to 5 for more retry attempts
     private String conflictResolution;
     private Map<String, Object> previousVersion;
+    private String errorType; // Type of error for better retry handling
+    private boolean retryable; // Flag indicating if operation is retryable
+    private boolean hasConflict; // Flag indicating if a conflict was detected
+    private String conflictType; // Type of conflict detected
+    private Map<String, Object> conflictDetails; // Detailed information about the conflict
     
     // Default constructor required for Firestore
     public SyncOperation() {
@@ -57,6 +62,8 @@ public class SyncOperation {
         this.completed = false;
         this.failed = false;
         this.attempts = 0;
+        this.hasConflict = false;
+        this.conflictDetails = new HashMap<>();
     }
     
     /**
@@ -150,6 +157,7 @@ public class SyncOperation {
      * @return String error message
      * @deprecated Use getErrorInfo() instead for more structured error information
      */
+    @Deprecated
     public String getError() {
         return error;
     }
@@ -225,7 +233,14 @@ public class SyncOperation {
      * @return boolean indicating if retry is possible
      */
     public boolean canRetry() {
-        return retryCount < maxRetries && (STATUS_FAILED.equals(status) || STATUS_RETRYING.equals(status));
+        // Use RetryWithBackoff to determine if we should retry
+        com.autogratuity.data.repository.sync.RetryWithBackoff retryWithBackoff = 
+                new com.autogratuity.data.repository.sync.RetryWithBackoff(maxRetries, 2.0, 1000, 3600000);
+                
+        boolean underMaxRetries = retryWithBackoff.shouldRetry(retryCount);
+        boolean hasAppropriateStatus = STATUS_FAILED.equals(status) || STATUS_RETRYING.equals(status);
+        
+        return underMaxRetries && hasAppropriateStatus && retryable;
     }
     
     /**
@@ -237,6 +252,14 @@ public class SyncOperation {
     }
     
     /**
+     * Set the conflict resolution strategy.
+     * @param strategy Conflict resolution strategy to use
+     */
+    public void setConflictResolution(String strategy) {
+        this.conflictResolution = strategy;
+    }
+    
+    /**
      * Get the previous version data.
      * @return Map previous version data
      */
@@ -245,11 +268,34 @@ public class SyncOperation {
     }
     
     /**
+     * Set the previous version data.
+     * @param previousVersion Previous version data to store
+     */
+    public void setPreviousVersion(Map<String, Object> previousVersion) {
+        this.previousVersion = previousVersion;
+    }
+    
+    /**
      * Get the next attempt time.
      * @return Timestamp next attempt time
      */
     public Timestamp getNextAttemptTime() {
         return nextAttemptTime;
+    }
+    
+    /**
+     * Calculate and get the delay until next retry in milliseconds
+     * @return long milliseconds until next retry or -1 if not retryable
+     */
+    public long getDelayUntilNextRetryMs() {
+        if (!canRetry() || nextAttemptTime == null) {
+            return -1;
+        }
+        
+        long nextTimeMs = nextAttemptTime.toDate().getTime();
+        long currentTimeMs = System.currentTimeMillis();
+        
+        return Math.max(0, nextTimeMs - currentTimeMs);
     }
     
     /**
@@ -285,6 +331,14 @@ public class SyncOperation {
     }
     
     /**
+     * Get the retry count for this operation.
+     * @return int retry count
+     */
+    public int getRetryCount() {
+        return retryCount;
+    }
+    
+    /**
      * Get error code.
      * @return String error code
      */
@@ -304,19 +358,148 @@ public class SyncOperation {
      * Mark operation as failed with error details
      * @param errorCode Error code
      * @param errorMessage Error message
+     * @param isRetryable Whether this failure is retryable
      */
-    public void markAsFailed(String errorCode, String errorMessage) {
+    /**
+     * Check if this operation has a conflict.
+     * @return true if a conflict has been detected
+     */
+    public boolean hasConflict() {
+        return hasConflict;
+    }
+    
+    /**
+     * Set the conflict status flag.
+     * @param hasConflict true if a conflict has been detected
+     */
+    public void setHasConflict(boolean hasConflict) {
+        this.hasConflict = hasConflict;
+    }
+    
+    /**
+     * Get the conflict type.
+     * @return String conflict type identifier
+     */
+    public String getConflictType() {
+        return conflictType;
+    }
+    
+    /**
+     * Set the conflict type.
+     * @param conflictType Type of conflict detected
+     */
+    public void setConflictType(String conflictType) {
+        this.conflictType = conflictType;
+    }
+    
+    /**
+     * Get detailed information about the conflict.
+     * @return Map with conflict details
+     */
+    public Map<String, Object> getConflictDetails() {
+        return conflictDetails;
+    }
+    
+    /**
+     * Set detailed information about the conflict.
+     * @param conflictDetails Map with conflict details
+     */
+    public void setConflictDetails(Map<String, Object> conflictDetails) {
+        this.conflictDetails = conflictDetails != null ? conflictDetails : new HashMap<>();
+    }
+    
+    /**
+     * Mark an operation as having a conflict.
+     * @param conflictType Type of conflict detected
+     * @param details Detailed information about the conflict
+     * @param recommendedResolution Recommended resolution strategy
+     */
+    public void markAsConflicted(String conflictType, Map<String, Object> details, String recommendedResolution) {
+        this.hasConflict = true;
+        this.conflictType = conflictType;
+        this.conflictDetails = details != null ? details : new HashMap<>();
+        this.conflictResolution = recommendedResolution;
+        
+        // Add conflict information to the error info if it exists
+        if (this.errorInfo != null) {
+            this.errorInfo.setCode("CONFLICT_" + conflictType);
+            this.errorInfo.setRecoveryAction(ErrorInfo.RECOVERY_MANUAL_RESOLVE);
+            this.errorInfo.addDetail("conflictType", conflictType);
+            this.errorInfo.addDetail("recommendedResolution", recommendedResolution);
+            
+            // Add number of conflicting fields if available
+            if (details != null && details.containsKey("conflictingFields")) {
+                Object conflictingFields = details.get("conflictingFields");
+                if (conflictingFields instanceof Map) {
+                    this.errorInfo.addDetail("conflictingFieldCount", ((Map) conflictingFields).size());
+                }
+            }
+        }
+    }
+    
+    public void markAsFailed(String errorCode, String errorMessage, boolean isRetryable) {
         this.failed = true;
         this.completed = false;
         this.error = errorMessage;
+        this.errorType = errorCode;
+        this.retryable = isRetryable;
         this.attempts++;
+        this.retryCount++;
         
-        // Calculate next retry time with exponential backoff
-        long delayMillis = Math.min(1000 * (long) Math.pow(2, this.attempts), 3600000); // Max 1 hour
-        Date nextAttempt = new Date(System.currentTimeMillis() + delayMillis);
-        this.nextAttemptTime = new Timestamp(nextAttempt);
+        // Use RetryWithBackoff to calculate next retry time with standardized parameters
+        com.autogratuity.data.repository.sync.RetryWithBackoff retryWithBackoff = 
+                new com.autogratuity.data.repository.sync.RetryWithBackoff(maxRetries, 2.0, 1000, 3600000);
         
-        // Create error info object
+        // Log retry attempt if operation is retryable
+        if (isRetryable && canRetry()) {
+            Throwable error = new Exception(errorMessage);
+            retryWithBackoff.logRetryAttempt(this.operationId, this.retryCount, error);
+            Date nextAttempt = retryWithBackoff.getNextRetryTime(this.retryCount);
+            this.nextAttemptTime = new Timestamp(nextAttempt);
+        }
+        
+        // Create error info object with retry information
         this.errorInfo = new ErrorInfo(errorCode, errorMessage, new Date());
+        if (isRetryable && canRetry()) {
+            this.errorInfo.setRecoveryAction(ErrorInfo.RECOVERY_RETRY);
+            // Include the next retry time in error info for better visibility
+            this.errorInfo.addDetail("nextRetryTime", this.nextAttemptTime);
+            this.errorInfo.addDetail("retryCount", this.retryCount);
+            this.errorInfo.addDetail("maxRetries", this.maxRetries);
+        }
+    }
+    
+    /**
+     * Mark operation as failed with error details (backward compatibility)
+     * @param errorCode Error code
+     * @param errorMessage Error message
+     */
+    public void markAsFailed(String errorCode, String errorMessage) {
+        // Use RetryWithBackoff to determine if error is retryable
+        com.autogratuity.data.repository.sync.RetryWithBackoff retryWithBackoff = 
+                new com.autogratuity.data.repository.sync.RetryWithBackoff();
+        
+        // Create exception to use RetryWithBackoff's error detection
+        Exception exception = new Exception(errorMessage) {
+            @Override
+            public String toString() {
+                return errorCode + ": " + getMessage();
+            }
+        };
+        
+        boolean isRetryable = retryWithBackoff.isRetryableError(exception);
+        
+        // If not detected as retryable, use the basic heuristic as fallback
+        if (!isRetryable && errorCode != null) {
+            isRetryable = errorCode.contains("UNAVAILABLE") ||
+                errorCode.contains("RESOURCE_EXHAUSTED") ||
+                errorCode.contains("DEADLINE_EXCEEDED") ||
+                errorCode.contains("INTERNAL") ||
+                errorCode.contains("ABORTED") ||
+                errorCode.contains("NETWORK") ||
+                errorCode.contains("TIMEOUT");
+        }
+        
+        markAsFailed(errorCode, errorMessage, isRetryable);
     }
 }

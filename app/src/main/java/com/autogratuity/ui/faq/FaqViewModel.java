@@ -115,8 +115,9 @@ public class FaqViewModel extends BaseViewModel {
                     if (shouldTrack) {
                         // Here we could integrate with analytics if needed
                         return configRepository.incrementCounter("faq_view_count");
+                    } else {
+                        return configRepository.noOpCompletable();
                     }
-                    return configRepository.noOpCompletable();
                 })
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(

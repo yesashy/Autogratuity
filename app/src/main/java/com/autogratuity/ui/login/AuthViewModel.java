@@ -12,8 +12,7 @@ import com.autogratuity.ui.common.BaseViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
-import io.reactivex.android.schedulers.AndroidSchedulers;
-import io.reactivex.schedulers.Schedulers;
+import com.autogratuity.data.util.RxSchedulers;
 
 /**
  * ViewModel for authentication-related activities, implementing the repository pattern.
@@ -156,18 +155,17 @@ public class AuthViewModel extends BaseViewModel {
         // Get default preferences from config
         disposables.add(
             configRepository.getConfigValue("default_preferences", "{}")
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applySingleSchedulers())
                 .subscribe(
                     defaultPrefs -> {
                         // Save user registration timestamp
-                        preferenceRepository.setLongPreference("user_registered_at", System.currentTimeMillis())
-                            .subscribeOn(Schedulers.io())
+                        preferenceRepository.setPreferenceSetting("user_registered_at", System.currentTimeMillis())
+                            .compose(RxSchedulers.applyCompletableSchedulers())
                             .subscribe();
                         
                         // Save user email for future reference
-                        preferenceRepository.setStringPreference("user_email", user.getEmail())
-                            .subscribeOn(Schedulers.io())
+                        preferenceRepository.setPreferenceSetting("user_email", user.getEmail())
+                            .compose(RxSchedulers.applyCompletableSchedulers())
                             .subscribe();
                     },
                     error -> Log.e(TAG, "Error saving initial preferences", error)

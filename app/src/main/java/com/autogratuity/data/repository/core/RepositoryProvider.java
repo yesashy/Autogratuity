@@ -4,6 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import com.autogratuity.data.repository.core.DataRepository;
+import com.autogratuity.data.repository.core.TracingRepositoryDecorator;
 import com.autogratuity.data.repository.address.AddressRepository;
 import com.autogratuity.data.repository.address.AddressRepositoryImpl;
 import com.autogratuity.data.repository.config.ConfigRepository;
@@ -41,6 +42,12 @@ public class RepositoryProvider {
     private static volatile SyncRepository syncRepository;
     private static NetworkMonitor networkMonitor;
     private static volatile boolean isInitialized = false;
+    
+    // Flag to enable repository method tracing
+    private static volatile boolean tracingEnabled = false;
+    
+    // Flag to enable detailed logging for method parameters and results
+    private static volatile boolean detailedLoggingEnabled = false;
     
     private RepositoryProvider() {
         // Private constructor to prevent instantiation
@@ -82,22 +89,40 @@ public class RepositoryProvider {
                     coreRepository = new FirestoreRepository(applicationContext);
                     
                     // Config repository
-                    configRepository = new ConfigRepositoryImpl(applicationContext);
+                    ConfigRepository baseConfigRepo = new ConfigRepositoryImpl(applicationContext);
+                    configRepository = tracingEnabled ? 
+                            TracingRepositoryDecorator.create(baseConfigRepo, ConfigRepository.class, detailedLoggingEnabled) : 
+                            baseConfigRepo;
                     
                     // Preference repository
-                    preferenceRepository = new PreferenceRepositoryImpl(applicationContext);
+                    PreferenceRepository basePrefRepo = new PreferenceRepositoryImpl(applicationContext);
+                    preferenceRepository = tracingEnabled ? 
+                            TracingRepositoryDecorator.create(basePrefRepo, PreferenceRepository.class, detailedLoggingEnabled) : 
+                            basePrefRepo;
                     
                     // Delivery repository
-                    deliveryRepository = new DeliveryRepositoryImpl(applicationContext);
+                    DeliveryRepository baseDeliveryRepo = new DeliveryRepositoryImpl(applicationContext);
+                    deliveryRepository = tracingEnabled ? 
+                            TracingRepositoryDecorator.create(baseDeliveryRepo, DeliveryRepository.class, detailedLoggingEnabled) : 
+                            baseDeliveryRepo;
                     
                     // Subscription repository
-                    subscriptionRepository = new SubscriptionRepositoryImpl(applicationContext);
+                    SubscriptionRepository baseSubRepo = new SubscriptionRepositoryImpl(applicationContext);
+                    subscriptionRepository = tracingEnabled ? 
+                            TracingRepositoryDecorator.create(baseSubRepo, SubscriptionRepository.class, detailedLoggingEnabled) : 
+                            baseSubRepo;
                     
                     // Address repository
-                    addressRepository = new AddressRepositoryImpl(applicationContext);
+                    AddressRepository baseAddressRepo = new AddressRepositoryImpl(applicationContext);
+                    addressRepository = tracingEnabled ? 
+                            TracingRepositoryDecorator.create(baseAddressRepo, AddressRepository.class, detailedLoggingEnabled) : 
+                            baseAddressRepo;
                     
                     // Sync repository
-                    syncRepository = new SyncRepositoryImpl(applicationContext);
+                    SyncRepository baseSyncRepo = new SyncRepositoryImpl(applicationContext);
+                    syncRepository = tracingEnabled ? 
+                            TracingRepositoryDecorator.create(baseSyncRepo, SyncRepository.class, detailedLoggingEnabled) : 
+                            baseSyncRepo;
                     
                     isInitialized = true;
                     Log.d(TAG, "Domain repositories initialized successfully");
@@ -230,5 +255,86 @@ public class RepositoryProvider {
         syncRepository = null;
         networkMonitor = null;
         isInitialized = false;
+    }
+    
+    /**
+     * Enable or disable repository method tracing.
+     * This setting affects newly created repository instances after the next initialize() call.
+     * 
+     * @param enabled true to enable tracing, false to disable
+     * @param detailedLogging true to enable detailed parameter and result logging
+     */
+    public static void setTracingEnabled(boolean enabled, boolean detailedLogging) {
+        tracingEnabled = enabled;
+        detailedLoggingEnabled = detailedLogging;
+        
+        Log.d(TAG, "Repository method tracing " + (enabled ? "enabled" : "disabled") + 
+                (enabled && detailedLogging ? " with detailed logging" : ""));
+    }
+    
+    /**
+     * Check if repository method tracing is enabled.
+     * 
+     * @return true if tracing is enabled, false otherwise
+     */
+    public static boolean isTracingEnabled() {
+        return tracingEnabled;
+    }
+    
+    /**
+     * Check if detailed logging is enabled for repository method tracing.
+     * 
+     * @return true if detailed logging is enabled, false otherwise
+     */
+    public static boolean isDetailedLoggingEnabled() {
+        return detailedLoggingEnabled;
+    }
+    
+    /**
+     * Get repository method tracing statistics.
+     * 
+     * @return Map of method names to their statistics
+     */
+    public static java.util.Map<String, TracingRepositoryDecorator.MethodStats> getTracingStatistics() {
+        return TracingRepositoryDecorator.getStatistics();
+    }
+    
+    /**
+     * Reset repository method tracing statistics.
+     */
+    public static void resetTracingStatistics() {
+        TracingRepositoryDecorator.resetStatistics();
+        Log.d(TAG, "Repository method tracing statistics reset");
+    }
+    
+    /**
+     * Log a summary of repository method tracing statistics.
+     */
+    public static void logTracingStatistics() {
+        if (!tracingEnabled) {
+            Log.d(TAG, "Repository method tracing is not enabled");
+            return;
+        }
+        
+        java.util.Map<String, TracingRepositoryDecorator.MethodStats> stats = getTracingStatistics();
+        if (stats.isEmpty()) {
+            Log.d(TAG, "No repository method tracing statistics available");
+            return;
+        }
+        
+        Log.d(TAG, "==== Repository Method Tracing Statistics ====");
+        for (java.util.Map.Entry<String, TracingRepositoryDecorator.MethodStats> entry : stats.entrySet()) {
+            String methodName = entry.getKey();
+            TracingRepositoryDecorator.MethodStats methodStats = entry.getValue();
+            
+            Log.d(TAG, String.format("%s: count=%d, avg=%dms, min=%dms, max=%dms, errors=%d",
+                    methodName,
+                    methodStats.getCount(),
+                    methodStats.getAvgTimeMs(),
+                    methodStats.getMinTimeMs(),
+                    methodStats.getMaxTimeMs(),
+                    methodStats.getErrorCount()));
+        }
+        Log.d(TAG, "===============================================");
     }
 }

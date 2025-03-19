@@ -21,6 +21,7 @@ import androidx.lifecycle.ViewModelProvider;
 import com.autogratuity.data.model.SyncStatus;
 import com.autogratuity.ui.address.AddressesFragment;
 import com.autogratuity.ui.common.RepositoryViewModelFactory;
+import com.autogratuity.ui.dashboard.DashboardFragment;
 import com.autogratuity.ui.delivery.DeliveriesFragment;
 import com.autogratuity.ui.main.MainViewModel;
 import com.google.android.material.button.MaterialButton;
@@ -187,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
         
         switch (tag) {
             case "dashboard":
-                fragment = new DashboardFragment();
+                fragment = DashboardFragment.newInstance();
                 break;
             case "deliveries":
                 fragment = DeliveriesFragment.newInstance();
@@ -196,7 +197,7 @@ public class MainActivity extends AppCompatActivity {
                 fragment = AddressesFragment.newInstance();
                 break;
             default:
-                fragment = new DashboardFragment();
+                fragment = DashboardFragment.newInstance();
                 tag = "dashboard";
                 break;
         }

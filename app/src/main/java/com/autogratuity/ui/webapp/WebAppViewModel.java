@@ -10,8 +10,7 @@ import com.autogratuity.data.repository.preference.PreferenceRepository;
 import com.autogratuity.data.security.AuthenticationManager;
 import com.autogratuity.ui.common.BaseViewModel;
 
-import io.reactivex.android.schedulers.AndroidSchedulers;
-import io.reactivex.schedulers.Schedulers;
+import com.autogratuity.data.util.RxSchedulers;
 
 /**
  * ViewModel for WebAppActivity, implementing the repository pattern.
@@ -93,8 +92,7 @@ public class WebAppViewModel extends BaseViewModel {
         // Load content from ConfigRepository
         disposables.add(
             configRepository.getConfigValue("webapp_content", "")
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .compose(RxSchedulers.applySingleSchedulers())
                 .subscribe(
                     content -> {
                         if (content != null && !content.isEmpty()) {
@@ -154,9 +152,8 @@ public class WebAppViewModel extends BaseViewModel {
      */
     public void savePreference(String key, String value) {
         disposables.add(
-            preferenceRepository.setStringPreference(key, value)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+            preferenceRepository.setPreferenceSetting(key, value)
+                .compose(RxSchedulers.applyCompletableSchedulers())
                 .subscribe(
                     () -> Log.d(TAG, "Preference saved: " + key),
                     error -> {

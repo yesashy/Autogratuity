@@ -1,22 +1,24 @@
 package com.autogratuity.data.repository.core;
 
 import com.autogratuity.data.security.AuthenticationManager;
+import com.autogratuity.data.repository.utils.RepositoryConstants;
+import com.autogratuity.data.repository.utils.RxJavaRepositoryExtensions;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
 import android.util.Log;
 
 import com.autogratuity.data.model.Address;
 import com.autogratuity.data.model.AppConfig;
 import com.autogratuity.data.model.Delivery;
 import com.autogratuity.data.model.DeliveryStats;
+import com.autogratuity.data.model.ErrorInfo;
 import com.autogratuity.data.model.SubscriptionStatus;
 import com.autogratuity.data.model.SyncOperation;
 import com.autogratuity.data.model.SyncStatus;
 import com.autogratuity.data.model.UserProfile;
 import com.autogratuity.data.util.NetworkMonitor;
+import com.autogratuity.data.util.RxSchedulers;
 import com.autogratuity.data.local.PreferenceManager;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -39,6 +41,7 @@ import java.util.concurrent.TimeUnit;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
+import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.BehaviorSubject;
 
@@ -54,6 +57,16 @@ import io.reactivex.subjects.BehaviorSubject;
  * - Common error handling and synchronization utilities
  * 
  * Domain-specific functionality is delegated to specialized repositories.
+ * 
+ * <h2>Repository Operation Guidelines</h2>
+ * <ul>
+ *     <li><b>get* methods:</b> Return a Single with a single value (e.g., getUserProfile())</li>
+ *     <li><b>observe* methods:</b> Return an Observable for real-time updates (e.g., observeUserProfile())</li>
+ *     <li><b>add* methods:</b> Return a Single<DocumentReference> for create operations (e.g., addDelivery())</li>
+ *     <li><b>update* methods:</b> Return a Completable for update operations (e.g., updateAddress())</li>
+ *     <li><b>delete* methods:</b> Return a Completable for delete operations (e.g., deleteAddress())</li>
+ *     <li><b>find* methods:</b> Return a Single or Maybe for conditional read operations (e.g., findByNormalizedAddress())</li>
+ * </ul>
  */
 public class FirestoreRepository implements DataRepository {
     protected static final String TAG = "FirestoreRepository";
@@ -88,13 +101,12 @@ public class FirestoreRepository implements DataRepository {
     // Device information
     protected final String deviceId;
     
-    // In-memory cache
-    protected final Map<String, Object> memoryCache;
-    protected final Map<String, Long> cacheTimestamps;
+    // Caching
+    protected final CacheStrategy<String, Object> cacheStrategy;
     protected final Map<String, ListenerRegistration> activeListeners;
     
-    // Cache TTL in milliseconds
-    protected static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    // Error handling
+    protected final RepositoryErrorHandler errorHandler;
     
     // Sync status tracking
     protected final BehaviorSubject<SyncStatus> syncStatusSubject;
@@ -145,9 +157,11 @@ public class FirestoreRepository implements DataRepository {
             prefs.edit().putString(KEY_DEVICE_ID, this.deviceId).apply();
         }
         
-        // Initialize cache
-        this.memoryCache = new ConcurrentHashMap<>();
-        this.cacheTimestamps = new ConcurrentHashMap<>();
+        // Initialize cache with standardized strategy
+        this.cacheStrategy = MemoryCache.<String, Object>builder()
+                .withExpiration(5, TimeUnit.MINUTES)
+                .build();
+        
         this.activeListeners = new ConcurrentHashMap<>();
         
         // Initialize network monitor
@@ -157,6 +171,9 @@ public class FirestoreRepository implements DataRepository {
         this.syncStatusSubject = BehaviorSubject.createDefault(new SyncStatus());
         this.networkStatusSubject = BehaviorSubject.createDefault(
                 isNetworkAvailable() ? NetworkStatus.CONNECTED : NetworkStatus.DISCONNECTED);
+        
+        // Initialize error handler with sync status
+        this.errorHandler = new RepositoryErrorHandler(syncStatusSubject);
         
         // Start monitoring network status
         startNetworkMonitoring();
@@ -194,8 +211,6 @@ public class FirestoreRepository implements DataRepository {
                 });
     }
     
-    // Note: Methods for user and device access are defined in the helper methods section below
-    
     /**
      * Check if network is available
      * 
@@ -204,8 +219,6 @@ public class FirestoreRepository implements DataRepository {
     protected boolean isNetworkAvailable() {
         return networkMonitor.isNetworkAvailable();
     }
-    
-    // Methods moved to the helper section below
     
     //-----------------------------------------------------------------------------------
     // Helper methods for user and device management
@@ -265,22 +278,6 @@ public class FirestoreRepository implements DataRepository {
     //-----------------------------------------------------------------------------------
     
     /**
-     * Check if cached data is still valid
-     * 
-     * @param key Cache key
-     * @return true if cache is valid, false otherwise
-     */
-    protected boolean isCacheValid(String key) {
-        Long timestamp = cacheTimestamps.get(key);
-        if (timestamp == null) {
-            return false;
-        }
-        
-        long now = System.currentTimeMillis();
-        return (now - timestamp) < CACHE_TTL_MS;
-    }
-    
-    /**
      * Get data from cache
      * 
      * @param key Cache key
@@ -289,10 +286,7 @@ public class FirestoreRepository implements DataRepository {
      */
     @SuppressWarnings("unchecked")
     protected <T> T getFromCache(String key) {
-        if (isCacheValid(key)) {
-            return (T) memoryCache.get(key);
-        }
-        return null;
+        return (T) cacheStrategy.get(key);
     }
     
     /**
@@ -303,8 +297,20 @@ public class FirestoreRepository implements DataRepository {
      * @param <T> Type of data
      */
     protected <T> void putInCache(String key, T data) {
-        memoryCache.put(key, data);
-        cacheTimestamps.put(key, System.currentTimeMillis());
+        cacheStrategy.put(key, data);
+    }
+    
+    /**
+     * Store data in cache with specific TTL
+     * 
+     * @param key Cache key
+     * @param data Data to cache
+     * @param ttl Time-to-live duration
+     * @param unit Time unit for TTL
+     * @param <T> Type of data
+     */
+    protected <T> void putInCache(String key, T data, long ttl, TimeUnit unit) {
+        cacheStrategy.put(key, data, ttl, unit);
     }
     
     /**
@@ -313,8 +319,34 @@ public class FirestoreRepository implements DataRepository {
      * @param key Cache key
      */
     protected void invalidateCache(String key) {
-        memoryCache.remove(key);
-        cacheTimestamps.remove(key);
+        cacheStrategy.remove(key);
+    }
+    
+    /**
+     * Get an item with caching applied using the standardized pattern.
+     * 
+     * @param cacheKey The cache key
+     * @param sourceProducer Function that produces a Single to fetch the item if not in cache
+     * @param <T> Type of data
+     * @return Single that emits the item from cache or source
+     */
+    protected <T> Single<T> getWithCache(String cacheKey, Function<String, Single<T>> sourceProducer) {
+        return RxJavaRepositoryExtensions.getWithCache(cacheStrategy, cacheKey, sourceProducer);
+    }
+    
+    /**
+     * Get an item with caching applied using the standardized pattern and specific TTL.
+     * 
+     * @param cacheKey The cache key
+     * @param sourceProducer Function that produces a Single to fetch the item if not in cache
+     * @param ttl Time-to-live duration
+     * @param unit Time unit for TTL
+     * @param <T> Type of data
+     * @return Single that emits the item from cache or source
+     */
+    protected <T> Single<T> getWithCache(String cacheKey, Function<String, Single<T>> sourceProducer, 
+                                      long ttl, TimeUnit unit) {
+        return RxJavaRepositoryExtensions.getWithCache(cacheStrategy, cacheKey, sourceProducer, ttl, unit);
     }
     
     /**
@@ -382,29 +414,60 @@ public class FirestoreRepository implements DataRepository {
      * @param collection Collection name
      * @return CollectionReference with user filter
      */
+    /**
+     * Create a collection reference for user-specific documents
+     *
+     * @param collection Collection name
+     * @return CollectionReference with user filter
+     */
     protected Query getUserCollectionReference(String collection) {
-        return db.collection(collection).whereEqualTo("userId", userId);
+        return QueryBuilder.collection(db, collection)
+                .whereEqualTo("userId", userId)
+                .build();
     }
     
     /**
-     * Handle a Firestore error and update sync status
+     * Create a QueryBuilder for a collection
+     *
+     * @param collection Collection name
+     * @return QueryBuilder for the collection
+     */
+    protected QueryBuilder queryBuilder(String collection) {
+        return QueryBuilder.collection(db, collection);
+    }
+    
+    /**
+     * Create a QueryBuilder for a user-specific collection
+     *
+     * @param collection Collection name
+     * @return QueryBuilder with the userId filter already applied
+     */
+    protected QueryBuilder userQueryBuilder(String collection) {
+        return QueryBuilder.collection(db, collection)
+                .whereEqualTo("userId", userId);
+    }
+    
+    /**
+     * Handle a Firestore error and update sync status using the standardized error handler.
+     * 
+     * @param error The exception
+     * @param operation Description of the operation that failed
+     * @param entityType Type of entity being operated on (for error reporting)
+     * @return ErrorInfo representing the handled error
+     */
+    protected ErrorInfo handleFirestoreError(Throwable error, String operation, String entityType) {
+        return errorHandler.handleError(error, operation, entityType);
+    }
+    
+    /**
+     * Legacy method for backward compatibility.
+     * New code should use the three-parameter version with entityType.
      * 
      * @param error The exception
      * @param operation Description of the operation that failed
      */
     protected void handleFirestoreError(Throwable error, String operation) {
-        Log.e(TAG, "Firestore error during " + operation, error);
-        
-        // Update sync status
-        SyncStatus currentStatus = syncStatusSubject.getValue();
-        currentStatus.setError("Error: " + error.getMessage());
-        syncStatusSubject.onNext(currentStatus);
-        
-        // If we're offline, queue a sync operation for later
-        if (!isNetworkAvailable()) {
-            currentStatus.setOnline(false);
-            syncStatusSubject.onNext(currentStatus);
-        }
+        handleFirestoreError(error, operation, null);
     }
     
     /**
@@ -453,7 +516,75 @@ public class FirestoreRepository implements DataRepository {
                     SyncOperation operation = new SyncOperation(userId, operationType, entityType, entityId, data);
                     operation.setAuthToken(token);
                     return enqueueSyncOperation(operation);
-                });
+                })
+                .compose(RxJavaRepositoryExtensions.applyStandardWriteTransformer(
+                        errorHandler,
+                        RepositoryConstants.operationName(RepositoryConstants.OperationName.SYNC, entityType, null),
+                        entityType));
+    }
+    
+    //-----------------------------------------------------------------------------------
+    // Standard Repository Transformers
+    //-----------------------------------------------------------------------------------
+    
+    /**
+     * Apply standard read transformers for repository operations.
+     * 
+     * @param entityType The entity type being operated on
+     * @param operationType The operation type (e.g., "get", "find")
+     * @param <T> The type of data being returned
+     * @return SingleTransformer for standard repository read operations
+     */
+    protected <T> Single.Transformer<T, T> applyReadTransformer(String entityType, String operationType) {
+        return single -> single.compose(RxJavaRepositoryExtensions.applyStandardReadTransformer(
+                errorHandler,
+                operationType,
+                entityType));
+    }
+    
+    /**
+     * Apply standard observe transformers for repository operations.
+     * 
+     * @param entityType The entity type being operated on
+     * @param operationType The operation type (e.g., "observe")
+     * @param <T> The type of data being observed
+     * @return ObservableTransformer for standard repository observe operations
+     */
+    protected <T> Observable.Transformer<T, T> applyObserveTransformer(String entityType, String operationType) {
+        return observable -> observable.compose(RxJavaRepositoryExtensions.applyStandardObserveTransformer(
+                errorHandler,
+                operationType,
+                entityType));
+    }
+    
+    /**
+     * Apply standard write transformers for repository operations.
+     * 
+     * @param entityType The entity type being operated on
+     * @param operationType The operation type (e.g., "add", "update", "delete")
+     * @return CompletableTransformer for standard repository write operations
+     */
+    protected Completable.Transformer applyWriteTransformer(String entityType, String operationType) {
+        return completable -> completable.compose(RxJavaRepositoryExtensions.applyStandardWriteTransformer(
+                errorHandler,
+                operationType,
+                entityType));
+    }
+    
+    /**
+     * Apply standard retry transformers for repository operations.
+     * 
+     * @param entityType The entity type being operated on
+     * @param operationType The operation type (e.g., "sync")
+     * @param maxRetries Maximum number of retry attempts
+     * @return CompletableTransformer for standard repository retry operations
+     */
+    protected Completable.Transformer applyRetryTransformer(String entityType, String operationType, int maxRetries) {
+        return completable -> completable.compose(RxJavaRepositoryExtensions.applyStandardRetryTransformerForCompletable(
+                errorHandler,
+                operationType,
+                entityType,
+                maxRetries));
     }
     
     //-----------------------------------------------------------------------------------
@@ -619,7 +750,10 @@ public class FirestoreRepository implements DataRepository {
     
     @Override
     public Single<SyncStatus> getSyncStatus() {
-        return Single.just(syncStatusSubject.getValue());
+        return Single.just(syncStatusSubject.getValue())
+                .compose(applyReadTransformer(
+                        RepositoryConstants.EntityType.SYNC_OPERATION,
+                        RepositoryConstants.operationName(RepositoryConstants.OperationName.GET, "sync status", null)));
     }
     
     @Override
@@ -644,7 +778,10 @@ public class FirestoreRepository implements DataRepository {
     
     @Override
     public Observable<SyncStatus> observeSyncStatus() {
-        return syncStatusSubject;
+        return syncStatusSubject
+                .compose(applyObserveTransformer(
+                        RepositoryConstants.EntityType.SYNC_OPERATION,
+                        RepositoryConstants.operationName(RepositoryConstants.OperationName.OBSERVE, "sync status", null)));
     }
     
     @Override
@@ -669,10 +806,13 @@ public class FirestoreRepository implements DataRepository {
     
     @Override
     public Completable clearCaches() {
-        // Clear all memory caches
-        memoryCache.clear();
-        cacheTimestamps.clear();
-        return Completable.complete();
+        // Clear cache
+        cacheStrategy.clear();
+        
+        return Completable.complete()
+                .compose(applyWriteTransformer(
+                        "all",
+                        "clear caches"));
     }
     
     @Override
@@ -690,8 +830,15 @@ public class FirestoreRepository implements DataRepository {
                     return Completable.complete();
                 })
                 .onErrorResumeNext(error -> {
-                    Log.e(TAG, "Error prefetching critical data", error);
-                    return Completable.complete(); // Complete without error to prevent app crashes
-                });
+                    // Handle error but don't propagate it to avoid app crashes
+                    errorHandler.handleError(
+                            error,
+                            "prefetching critical data",
+                            RepositoryConstants.EntityType.APP_CONFIG);
+                    return Completable.complete();
+                })
+                .compose(applyWriteTransformer(
+                        "all",
+                        "prefetch critical data"));
     }
 }
